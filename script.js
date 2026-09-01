@@ -537,7 +537,6 @@
 
   function paletteActions() {
     const actions = [
-      { kind: 'action', id: 'a-add', name: 'Add tool', hint: 'Create a new card', icon: 'ui-plus', run: () => openToolDialog(null) },
       { kind: 'action', id: 'a-view', name: state.view === 'grid' ? 'Switch to list view' : 'Switch to grid view',
         hint: 'Change how the wall is laid out', icon: state.view === 'grid' ? 'ui-list' : 'ui-grid',
         run: () => setView(state.view === 'grid' ? 'list' : 'grid') },
@@ -546,7 +545,12 @@
         run: () => setOrder(state.order === 'manual' ? 'frecency' : 'manual') },
       { kind: 'action', id: 'a-theme', name: 'Switch theme', hint: 'System, light or dark', icon: 'ui-sun', run: cycleTheme }
     ];
+    // Managing the wall needs a backend. Without one, offering "Add tool" only
+    // leads to a sign-in sheet that can never succeed -- the topbar already
+    // hides these, and the palette must agree with it.
     if (cloud.configured()) {
+      actions.unshift({ kind: 'action', id: 'a-add', name: 'Add tool',
+        hint: 'Create a new card', icon: 'ui-plus', run: () => openToolDialog(null) });
       actions.push(state.signedIn
         ? { kind: 'action', id: 'a-out', name: 'Sign out', hint: state.email, icon: 'ui-user', run: signOut }
         : { kind: 'action', id: 'a-in', name: 'Sign in', hint: 'Manage and sync your cards', icon: 'ui-user', run: openAuthDialog });
@@ -1202,8 +1206,12 @@
       // The pill is the whole status surface. In a deployed build this branch
       // is unreachable: the workflow fails if the placeholders survive.
       setPill('idle', 'Local only');
+      el.pill.title = 'No database is configured for this deployment, so the wall ' +
+                      'is read-only here. Your cards still launch, and anything ' +
+                      'saved on this device stays on it.';
       el.authBtn.hidden = true;
       el.addBtn.hidden = true;
+      el.emptyAdd.hidden = true;
       return;
     }
 

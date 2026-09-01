@@ -27,9 +27,15 @@
    ============================================================ */
 
 window.SUPABASE_CONFIG = {
-  // Deployment replaces these two placeholders from GitHub configuration.
-  // Never substitute a service-role/secret key here: this file is public.
-  url: 'PUT_YOUR_SUPABASE_URL_HERE',
-  publishableKey: 'PUT_YOUR_PUBLISHABLE_KEY_HERE',
+  // These are committed directly rather than injected at deploy time, because
+  // GitHub Pages serves this repository from the branch with no build step.
+  // That is safe: the publishable key is designed to ship in page source and
+  // grants nothing on its own -- the protection is the row-level security
+  // described in the README, not the secrecy of this value.
+  //
+  // Never put a service-role/secret key here. It bypasses every RLS policy in
+  // the project, and this file is world-readable.
+  url: 'https://baiojghilzxhkebfblzv.supabase.co',
+  publishableKey: 'sb_publishable_nfLVr5Krdld9pxxr4f2CYQ_bsn0TNxx',
   schema: 'hut'
 };
