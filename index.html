@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="Kalistamp Hut — the launcher for the workshop.">
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'self'; connect-src 'self' https://baiojghilzxhkebfblzv.supabase.co wss://baiojghilzxhkebfblzv.supabase.co; form-action 'self'; frame-ancestors 'none'; frame-src 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'sha384-CPHYu6XYyDiXZUTsuAOX8S4KnBPCcAmDkxIG1XfqBn3dvxVhdB0gl/RI5BdT6h6F' https://cdn.jsdelivr.net; style-src 'self'; upgrade-insecure-requests">
+      content="default-src 'self'; base-uri 'self'; connect-src 'self' https://baiojghilzxhkebfblzv.supabase.co wss://baiojghilzxhkebfblzv.supabase.co; form-action 'self'; frame-ancestors 'none'; frame-src 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'sha384-HxK0DTkVUFLQMiZnnEUpYyIjqJIRYFTtnEtQOZUnFWhypPF3nozzyGdWt7JiEg5h' https://cdn.jsdelivr.net; style-src 'self'; upgrade-insecure-requests">
 <title>Kalistamp Hut</title>
 <!-- ?v= is a cache buster: bump it whenever style.css or the scripts change so
      returning visitors never run a stale stylesheet against new markup. -->
 <link rel="stylesheet" href="./style.css?v=3">
-<!-- Hashed by the CSP; runs before CSS paints so an explicit theme choice
-     never flashes the other one. Absent or 'system' means follow the OS,
-     which the stylesheet does on its own -- so this only has to write the
-     attribute when the user has actually chosen. -->
-<script>(function(){try{var t=localStorage.getItem('hut.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<!-- Hashed by the CSP; runs before CSS paints so a stored theme never
+     flashes the other one. <html> already carries data-theme="dark", so this
+     only has to override it when the stored choice is light.
+     CHANGING THIS SCRIPT MEANS REGENERATING ITS sha384 IN THE CSP ABOVE. -->
+<script>(function(){try{var t=localStorage.getItem('hut.theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(e){}})();</script>
 </head>
 <body>
 
@@ -125,10 +125,6 @@
     <symbol id="hut-ui-moon" viewBox="0 0 24 24">
       <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/>
     </symbol>
-    <symbol id="hut-ui-system" viewBox="0 0 24 24">
-      <rect x="3" y="4.5" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
-      <path d="M8.5 20h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-    </symbol>
     <symbol id="hut-ui-out" viewBox="0 0 24 24">
       <path d="M14 4h6v6M20 4l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="M18 14v5a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V7.5A1.5 1.5 0 0 1 5 6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -164,8 +160,8 @@
       <span class="add-label">Add tool</span>
     </button>
 
-    <button id="themeBtn" class="btn btn-icon" type="button" aria-label="Theme: follow system">
-      <svg aria-hidden="true" focusable="false"><use id="themeIcon" href="#hut-ui-system"/></svg>
+    <button id="themeBtn" class="btn btn-icon" type="button" aria-label="Theme: dark. Switch to light.">
+      <svg aria-hidden="true" focusable="false"><use id="themeIcon" href="#hut-ui-moon"/></svg>
     </button>
 
     <button id="authBtn" class="btn btn-icon" type="button" aria-label="Sign in">

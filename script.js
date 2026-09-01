@@ -86,7 +86,7 @@
     usage: {},
     view: 'grid',      // grid | list
     order: 'manual',   // manual | frecency
-    theme: 'system',   // system | light | dark
+    theme: 'dark',     // light | dark
     palette: { open: false, items: [], index: 0 }
   };
 
@@ -543,7 +543,7 @@
       { kind: 'action', id: 'a-order', name: state.order === 'manual' ? 'Sort by most used' : 'Sort manually',
         hint: 'Change the order of the wall', icon: 'ui-clock',
         run: () => setOrder(state.order === 'manual' ? 'frecency' : 'manual') },
-      { kind: 'action', id: 'a-theme', name: 'Switch theme', hint: 'System, light or dark', icon: 'ui-sun', run: cycleTheme }
+      { kind: 'action', id: 'a-theme', name: 'Switch theme', hint: 'Light or dark', icon: 'ui-sun', run: cycleTheme }
     ];
     // Managing the wall needs a backend. Without one, offering "Add tool" only
     // leads to a sign-in sheet that can never succeed -- the topbar already
@@ -1063,20 +1063,18 @@
 
   /* ── theme ────────────────────────────────────────────── */
 
-  /* Three states, not two. The old build hardcoded dark on <html> and never
-     consulted the OS at all, so anyone on a light desktop got dark until they
-     found the toggle. `system` is the default and the stylesheet handles it;
-     an explicit choice writes data-theme and wins in both directions. */
+  /* Two states. The theme is always an explicit choice written to <html>,
+     never inferred from the OS -- so what you picked is what you get on every
+     device, and the markup alone is enough to render the right colours. Dark
+     is the default for a first visit. */
 
-  const THEME_ORDER = ['system', 'light', 'dark'];
-  const THEME_LABEL = { system: 'follow system', light: 'light', dark: 'dark' };
-  const THEME_ICON  = { system: 'ui-system', light: 'ui-sun', dark: 'ui-moon' };
+  const THEME_ORDER = ['light', 'dark'];
+  const THEME_LABEL = { light: 'light', dark: 'dark' };
+  const THEME_ICON  = { light: 'ui-sun', dark: 'ui-moon' };
 
   function applyTheme(theme) {
-    state.theme = THEME_ORDER.indexOf(theme) >= 0 ? theme : 'system';
-    const root = document.documentElement;
-    if (state.theme === 'system') root.removeAttribute('data-theme');
-    else root.setAttribute('data-theme', state.theme);
+    state.theme = THEME_ORDER.indexOf(theme) >= 0 ? theme : 'dark';
+    document.documentElement.setAttribute('data-theme', state.theme);
 
     writeLocal(LS.theme, state.theme);
     el.themeIcon.setAttribute('href', '#hut-' + THEME_ICON[state.theme]);
@@ -1183,8 +1181,8 @@
     const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
     el.searchKbd.textContent = mac ? '⌘K' : 'Ctrl K';
 
-    let storedTheme = 'system';
-    try { storedTheme = localStorage.getItem(LS.theme) || 'system'; } catch (_) {}
+    let storedTheme = 'dark';
+    try { storedTheme = localStorage.getItem(LS.theme) || 'dark'; } catch (_) {}
     applyTheme(storedTheme);
 
     state.usage = readJson(LS.usage, {});

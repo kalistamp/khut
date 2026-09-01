@@ -219,12 +219,16 @@ something unreadable rather than something plain.
 
 ### Theme
 
-Three states, not two: `system` is the default and follows the OS; `light` and
-`dark` write `data-theme` on `<html>` and win over it in both directions. Every
-token is defined on bare `:root` first, so no colour has its only definition
-inside a media query. The CSP-hashed boot script only has to write the
-attribute when the user has actually chosen — **its hash in the CSP must be
-recomputed whenever that script changes.**
+Two states: `light` and `dark`, chosen explicitly and never inferred from the
+OS. `<html>` always carries `data-theme`, so the theme is a fact in the markup
+rather than a media-query outcome — the page renders correctly even with
+JavaScript blocked, and the stylesheet contains no `prefers-color-scheme` rule
+at all. Dark is the default on a first visit, and a `hut.theme` value left over
+from an older build (such as `system`) falls back to dark rather than breaking.
+
+The CSP-hashed boot script only has to override the markup default when the
+stored choice is light — **its hash in the CSP must be recomputed whenever that
+script changes.**
 
 ### Motion
 

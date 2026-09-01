@@ -21,10 +21,10 @@
      degrades to something unreadable rather than something plain.
 
    THEME
-     Three states. `system` is the default and follows the OS; an explicit
-     choice writes data-theme on <html> and wins over it in both directions.
-     Every token is defined on bare :root first, so no colour has its only
-     definition inside a media query.
+     Two states, light and dark, chosen explicitly and never inferred from the
+     OS. <html> always carries data-theme, so the theme is a fact in the
+     markup rather than a media-query outcome -- and the page still renders
+     correctly with JavaScript blocked.
    ============================================================ */
 
 /* ── tokens ─────────────────────────────────────────────── */
@@ -82,37 +82,7 @@
   color-scheme: light;
 }
 
-/* System dark: applies unless the user has explicitly chosen light. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg:            #100e0c;
-    --surface:       #191613;
-    --surface-2:     #221e1a;
-    --surface-sunken:#0c0a09;
-
-    --fg:            #f4efe8;
-    --fg-muted:      #b0a798;
-    --fg-subtle:     #9a9082;
-
-    --border:        #332c25;
-    --border-strong: #6d6356;
-
-    --primary:       #ff8a3d;
-    --on-primary:    #241206;
-    --primary-soft:  #341f0e;
-
-    --ring:          #ff9d57;
-
-    --ok:            #5cc98d;
-    --warn:          #e0a03c;
-    --danger:        #f0705c;
-    --danger-soft:   #3a1a15;
-
-    color-scheme: dark;
-  }
-}
-
-/* Explicit dark: wins regardless of the OS setting. */
+/* Dark. Selected by data-theme on <html>; never by prefers-color-scheme. */
 :root[data-theme="dark"] {
   --bg:            #100e0c;
   --surface:       #191613;
@@ -155,15 +125,6 @@
 .accent-lagoon { --tile: #e0ecfd; --glyph: #124e93; }
 .accent-orchid { --tile: #f3e5fd; --glyph: #732ba0; }
 .accent-slate  { --tile: #e6eaef; --glyph: #3d4f64; }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .accent-ember  { --tile: #341f0e; --glyph: #ff9e5c; }
-  :root:not([data-theme="light"]) .accent-citrus { --tile: #2f2609; --glyph: #f0b73a; }
-  :root:not([data-theme="light"]) .accent-mint   { --tile: #0e2b21; --glyph: #52d9a6; }
-  :root:not([data-theme="light"]) .accent-lagoon { --tile: #101f33; --glyph: #6cb6ff; }
-  :root:not([data-theme="light"]) .accent-orchid { --tile: #271335; --glyph: #c98cf5; }
-  :root:not([data-theme="light"]) .accent-slate  { --tile: #1d232b; --glyph: #a3b4c7; }
-}
 
 :root[data-theme="dark"] .accent-ember  { --tile: #341f0e; --glyph: #ff9e5c; }
 :root[data-theme="dark"] .accent-citrus { --tile: #2f2609; --glyph: #f0b73a; }
