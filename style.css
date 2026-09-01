@@ -1,0 +1,674 @@
+/* ============================================================
+   KALISTAMP HUT — Lantern Hut
+
+   A warm, dark workshop wall; each tool is an enamel tag hanging on it.
+
+   Deliberately conservative CSS. No oklch, no colour-mix, no backdrop-filter,
+   no container queries — the same call the dough app made, for the same
+   reason: these pages get opened on older phones and a half-supported colour
+   function degrades to something unreadable rather than something plain.
+
+   Everything that moves, moves on `transform` or `opacity` only, so a card
+   hover never triggers layout. The tilt and the cursor glow are bound behind
+   `(hover: hover) and (pointer: fine)` — a touch device gets a press-scale
+   instead of a tilt that would need a pointer it does not have — and the whole
+   motion layer collapses under `prefers-reduced-motion`.
+   ============================================================ */
+
+/* ── tokens ─────────────────────────────────────────────── */
+
+:root {
+  --ground:      #f6f1e8;
+  --ground-2:    #efe7da;
+  --surface:     #fffdf9;
+  --surface-2:   #f3ece1;
+  --line:        #ded2c0;
+  --line-soft:   #e9e0d2;
+  --ink:         #2a2118;
+  --ink-soft:    #6b5d4c;
+  --ink-faint:   #93826d;
+  --lantern:     rgba(255, 186, 92, .30);
+  --shadow:      rgba(74, 56, 32, .16);
+  --shadow-lift: rgba(74, 56, 32, .26);
+  --danger:      #b3392b;
+  --ok:          #2f7d54;
+
+  --radius:      18px;
+  --radius-sm:   11px;
+  --tap:         44px;
+
+  --ease:        cubic-bezier(.22, .8, .28, 1);
+  --spring:      cubic-bezier(.34, 1.56, .48, 1);
+}
+
+.theme-dark {
+  --ground:      #0e0c0b;
+  --ground-2:    #17130f;
+  --surface:     #1b1613;
+  --surface-2:   #241d18;
+  --line:        #362c24;
+  --line-soft:   #2a221c;
+  --ink:         #f6ece0;
+  --ink-soft:    #b8a894;
+  --ink-faint:   #8a7967;
+  --lantern:     rgba(255, 172, 74, .16);
+  --shadow:      rgba(0, 0, 0, .5);
+  --shadow-lift: rgba(0, 0, 0, .66);
+  --danger:      #ef6a58;
+  --ok:          #63c48d;
+}
+
+/* Accent pairs. Each card sets one of these classes; nothing ever writes a
+   colour into a style attribute, so the accent column can stay a CHECK-
+   constrained enum and an unknown value simply falls back to ember. */
+.accent-ember  { --a1: #ff8a3d; --a2: #ff4d6d; --glow: rgba(255, 122, 64, .30); }
+.accent-citrus { --a1: #ffc531; --a2: #ff8f2e; --glow: rgba(255, 190, 54, .30); }
+.accent-mint   { --a1: #45d9a4; --a2: #16a3c4; --glow: rgba(64, 214, 165, .28); }
+.accent-lagoon { --a1: #4aa8ff; --a2: #6f5bff; --glow: rgba(80, 160, 255, .30); }
+.accent-orchid { --a1: #c778ff; --a2: #ff5fa8; --glow: rgba(199, 120, 255, .30); }
+.accent-slate  { --a1: #93a4b8; --a2: #5b6b80; --glow: rgba(147, 164, 184, .26); }
+
+/* ── base ───────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* The overhead lantern. One fixed, non-interactive layer so the warm pool of
+   light stays put while the wall scrolls under it. */
+.lantern {
+  position: fixed;
+  inset: -20% -20% auto -20%;
+  height: 70vh;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60% 60% at 50% 0%, var(--lantern), transparent 72%);
+}
+
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+:focus-visible {
+  outline: 2px solid var(--a1, #ff8a3d);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── topbar ─────────────────────────────────────────────── */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px clamp(14px, 4vw, 34px);
+  background: var(--ground);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: auto;
+  color: var(--ink);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #ff8a3d, #ff4d6d);
+  box-shadow: 0 4px 14px rgba(255, 110, 70, .35);
+}
+
+.brand-text { font-size: 1.06rem; letter-spacing: .2px; color: var(--ink-soft); }
+.brand-text b { color: var(--ink); font-weight: 700; }
+
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── buttons ────────────────────────────────────────────── */
+
+.btn {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform .14s var(--ease), border-color .14s var(--ease),
+              background .14s var(--ease);
+}
+
+.btn:hover { border-color: var(--ink-faint); }
+.btn:active { transform: scale(.96); }
+
+.btn-primary {
+  border-color: transparent;
+  color: #23150c;
+  background: linear-gradient(135deg, #ffb03d, #ff7043);
+  box-shadow: 0 3px 12px rgba(255, 130, 60, .30);
+}
+.btn-primary:hover { border-color: transparent; filter: brightness(1.06); }
+
+.btn-danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+
+.btn-icon { width: var(--tap); padding: 0; }
+
+/* ── sync pill ──────────────────────────────────────────── */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.pill-idle   { color: var(--ink-faint); }
+.pill-sync   { color: #d9861f; }
+.pill-synced { color: var(--ok); }
+.pill-error  { color: var(--danger); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .pill-sync::before { animation: pulse 1.1s ease-in-out infinite; }
+}
+@keyframes pulse { 50% { opacity: .25; } }
+
+/* ── layout ─────────────────────────────────────────────── */
+
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 40px) clamp(14px, 4vw, 34px) 72px;
+}
+
+.grid {
+  display: grid;
+  gap: clamp(14px, 2.4vw, 22px);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.empty {
+  margin: 40px 0;
+  padding: 34px 22px;
+  text-align: center;
+  color: var(--ink-soft);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+
+/* ── the card ───────────────────────────────────────────── */
+
+/* The slot is the grid item and the drag unit. It exists so the card's
+   edit/delete/reorder buttons can be siblings of the anchor rather than
+   children of it -- a button inside an <a> is invalid, and its click would
+   bubble up and navigate away. */
+.card-slot {
+  position: relative;
+  display: block;
+}
+
+.card {
+  position: relative;
+  display: block;
+  height: 100%;
+  padding: 20px 18px 18px;
+  min-height: 168px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  isolation: isolate;
+  box-shadow: 0 2px 10px var(--shadow);
+  transform: translateZ(0);
+  transition: box-shadow .22s var(--ease), border-color .22s var(--ease),
+              transform .32s var(--spring);
+  will-change: transform;
+}
+
+/* The accent wash. Sits under the content and above the surface, so the card
+   reads as a coloured object rather than a grey box with a coloured label. */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  opacity: .09;
+  background: linear-gradient(150deg, var(--a1), var(--a2));
+  transition: opacity .22s var(--ease);
+}
+
+/* The cursor-tracked glow. --mx/--my are written by script.js on pointermove
+   through CSSOM, which the strict style-src does not block. */
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  opacity: 0;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%),
+                              var(--glow), transparent 72%);
+  transition: opacity .28s var(--ease);
+}
+
+.card-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 14px;
+  border-radius: 15px;
+  font-size: 30px;
+  line-height: 1;
+  color: #fff;
+  background: linear-gradient(140deg, var(--a1), var(--a2));
+  box-shadow: 0 4px 14px var(--glow);
+  transform: translateZ(0);
+  transition: transform .3s var(--spring), box-shadow .22s var(--ease);
+}
+
+.card-icon svg { width: 30px; height: 30px; display: block; }
+
+.card-name {
+  margin: 0 0 4px;
+  font-size: 1.09rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.card-desc {
+  margin: 0;
+  font-size: .85rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  /* Two lines, then ellipsis — a long description must not make one card
+     taller than its neighbours and tear a hole in the grid. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-host {
+  margin-top: 12px;
+  font-size: .74rem;
+  color: var(--ink-faint);
+  letter-spacing: .3px;
+  word-break: break-all;
+}
+
+/* The accent rule along the bottom edge, which fills on hover. */
+.card-rule {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--a1), var(--a2));
+  transform: scaleX(.22);
+  transform-origin: left;
+  opacity: .55;
+  transition: transform .34s var(--ease), opacity .22s var(--ease);
+}
+
+/* ── card actions ───────────────────────────────────────── */
+
+.card-menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity .18s var(--ease), transform .18s var(--ease);
+}
+
+/* Keyboard users never hover, so focus inside the card reveals the same
+   controls a pointer would. Touch gets them permanently (see the media query
+   at the end of this file). */
+.card-slot:hover .card-menu,
+.card-slot:focus-within .card-menu { opacity: 1; transform: none; }
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: .8rem;
+  transition: transform .14s var(--ease), color .14s var(--ease),
+              border-color .14s var(--ease);
+}
+.icon-btn:hover { color: var(--ink); border-color: var(--ink-faint); transform: scale(1.08); }
+.icon-btn:active { transform: scale(.92); }
+.icon-btn svg { width: 15px; height: 15px; }
+
+/* ── drag to reorder ────────────────────────────────────── */
+
+.card-slot.dragging {
+  opacity: .5;
+  cursor: grabbing;
+}
+
+.card-slot.dragging .card { border-color: var(--a1); }
+
+/* touch-action: none is what makes the pointer-drag work on a phone: without
+   it the browser claims the gesture for scrolling and the drag never starts. */
+.drag-handle { cursor: grab; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
+
+/* ── pointer-only motion ────────────────────────────────── */
+
+/* Everything expensive lives in here. A phone never parses a tilt it cannot
+   drive, and never pays for a will-change on a layer that will not move. */
+@media (hover: hover) and (pointer: fine) {
+  .card {
+    transform: perspective(760px)
+               rotateX(var(--rx, 0deg))
+               rotateY(var(--ry, 0deg))
+               translateZ(0);
+  }
+
+  .card-slot:hover .card {
+    border-color: transparent;
+    box-shadow: 0 16px 38px var(--shadow-lift);
+    transition: box-shadow .22s var(--ease), border-color .22s var(--ease),
+                transform .09s linear;
+  }
+
+  .card-slot:hover .card::before { opacity: .17; }
+  .card-slot:hover .card::after  { opacity: 1; }
+  .card-slot:hover .card-rule { transform: scaleX(1); opacity: 1; }
+
+  .card-slot:hover .card-icon {
+    transform: scale(1.1) rotate(-7deg);
+    box-shadow: 0 10px 24px var(--glow);
+  }
+}
+
+/* Touch: no tilt, no cursor glow — a press-scale that actually corresponds to
+   the gesture, and the action buttons always visible because there is no
+   hover state to reveal them. */
+@media not all and (hover: hover) {
+  .card:active { transform: scale(.975); }
+  .card-menu { opacity: 1; transform: none; }
+}
+
+.card.launching { animation: launch .34s var(--ease); }
+@keyframes launch {
+  40%  { transform: scale(1.03) translateY(-5px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+/* ── dialogs ────────────────────────────────────────────── */
+
+.sheet {
+  width: min(520px, calc(100vw - 28px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+}
+
+.sheet-narrow { width: min(400px, calc(100vw - 28px)); }
+
+.sheet::backdrop { background: rgba(8, 6, 5, .62); }
+
+.sheet form { padding: 22px; }
+
+.sheet h2 { margin: 0 0 14px; font-size: 1.16rem; }
+
+.muted { color: var(--ink-soft); font-size: .88rem; margin: 0 0 16px; }
+
+.field {
+  display: block;
+  margin: 0 0 15px;
+  padding: 0;
+  border: 0;
+}
+
+.field > span,
+.field > legend {
+  display: block;
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .35px;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.field em { font-style: normal; font-weight: 500; text-transform: none; opacity: .8; }
+
+.field input[type="text"],
+.field input[type="url"],
+.field input[type="email"],
+.field input[type="password"] {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem; /* 16px stops iOS Safari zooming the page on focus */
+}
+
+.field input:focus {
+  outline: none;
+  border-color: #ff8a3d;
+  box-shadow: 0 0 0 3px rgba(255, 138, 61, .22);
+}
+
+.hint { display: block; margin-top: 5px; font-size: .76rem; color: var(--ink-faint); }
+.hint code { font-size: .95em; }
+
+.error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(200, 60, 40, .12);
+  color: var(--danger);
+  font-size: .86rem;
+}
+
+.sheet-actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
+.spacer { flex: 1; }
+
+/* ── icon + accent pickers ──────────────────────────────── */
+
+.icon-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+
+.tab {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--ground);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab[aria-selected="true"] {
+  background: var(--surface-2);
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.emoji-input {
+  text-align: center;
+  font-size: 1.6rem !important;
+  letter-spacing: 2px;
+}
+
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pick {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--ground);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .14s var(--spring), border-color .14s var(--ease);
+}
+.pick:hover { transform: scale(1.14); border-color: var(--ink-faint); }
+.pick[aria-pressed="true"] { border-color: #ff8a3d; box-shadow: 0 0 0 2px rgba(255,138,61,.25); }
+.pick svg { width: 22px; height: 22px; color: var(--ink); }
+
+.accents { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.swatch {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  background: linear-gradient(140deg, var(--a1), var(--a2));
+  transition: transform .16s var(--spring);
+}
+.swatch:hover { transform: scale(1.14); }
+.swatch[aria-pressed="true"] {
+  border-color: var(--ink);
+  transform: scale(1.1);
+}
+
+/* ── toast ──────────────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 60;
+  transform: translateX(-50%);
+  max-width: min(440px, calc(100vw - 28px));
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: .88rem;
+  box-shadow: 0 10px 30px var(--shadow-lift);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: rise .26s var(--ease); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+}
+
+/* ── reduced motion ─────────────────────────────────────── */
+
+/* The tilt, the glow sweep, the icon wiggle and the launch bounce are all
+     decoration. Someone who has asked the OS for less motion gets the same
+     information with colour and opacity alone. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card,
+  .card-slot:hover .card { transform: none !important; }
+  .card-icon,
+  .card-slot:hover .card-icon { transform: none !important; }
+  .card-rule { transform: scaleX(1); }
+  .card.launching { animation: none !important; }
+}
+
+/* ── small screens ──────────────────────────────────────── */
+
+@media (max-width: 560px) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .card { min-height: 150px; padding: 16px 14px 14px; }
+  .card-icon { width: 46px; height: 46px; font-size: 25px; margin-bottom: 11px; }
+  .card-icon svg { width: 25px; height: 25px; }
+  .card-name { font-size: .98rem; }
+  .card-desc { -webkit-line-clamp: 2; font-size: .8rem; }
+  .card-host { display: none; }
+  .brand-text { display: none; }
+  .topbar { gap: 8px; }
+  .btn { padding: 0 12px; font-size: .86rem; }
+}
