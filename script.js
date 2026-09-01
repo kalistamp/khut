@@ -21,6 +21,12 @@
      six starter tools are the DEFAULT_TOOLS constant below rather than rows
      inserted by a migration: the page has to paint before the database
      answers, and before there is an account at all.
+
+   WHAT IS DELIBERATELY LOCAL
+     Launch counts (hut.usage), the view mode and the sort mode are per-device
+     preferences, not records. They live only in localStorage, which is why
+     "Most used" needed no migration and no new column: how you reach a tool on
+     this phone is not a fact about the tool.
    ============================================================ */
 
 (function () {
@@ -51,11 +57,18 @@
 
   const LS = {
     tools: 'hut.tools',
-    theme: 'hut.theme'
+    theme: 'hut.theme',
+    usage: 'hut.usage',
+    view:  'hut.view',
+    order: 'hut.order'
   };
 
   const SAVE_DEBOUNCE_MS = 700;
-  const TILT_DEGREES = 7;
+
+  // A launch a week old counts half as much as one today. Long enough that a
+  // tool used every few days holds its place, short enough that the wall
+  // follows what you are actually working on this month.
+  const FRECENCY_HALFLIFE_MS = 7 * 24 * 60 * 60 * 1000;
 
   /* ── state ────────────────────────────────────────────── */
 
@@ -69,7 +82,12 @@
     saveTimer: null,
     editingId: null,
     pendingDeleteId: null,
-    draft: { icon: '\u{1F9F0}', iconKind: 'emoji', accent: 'ember' }
+    draft: { icon: '\u{1F9F0}', iconKind: 'emoji', accent: 'ember' },
+    usage: {},
+    view: 'grid',      // grid | list
+    order: 'manual',   // manual | frecency
+    theme: 'system',   // system | light | dark
+    palette: { open: false, items: [], index: 0 }
   };
 
   const $ = (id) => document.getElementById(id);
@@ -77,11 +95,25 @@
   const el = {
     grid: $('grid'),
     empty: $('emptyState'),
+    emptyAdd: $('emptyAdd'),
+    count: $('toolCount'),
     pill: $('syncPill'),
     addBtn: $('addBtn'),
     authBtn: $('authBtn'),
     themeBtn: $('themeBtn'),
+    themeIcon: $('themeIcon'),
+    searchBtn: $('searchBtn'),
+    searchKbd: $('searchKbd'),
     toast: $('toast'),
+
+    orderManual: $('orderManual'),
+    orderFrecency: $('orderFrecency'),
+    viewGrid: $('viewGrid'),
+    viewList: $('viewList'),
+
+    paletteDialog: $('paletteDialog'),
+    paletteInput: $('paletteInput'),
+    paletteList: $('paletteList'),
 
     toolDialog: $('toolDialog'),
     toolForm: $('toolForm'),
@@ -115,9 +147,6 @@
     confirmCancel: $('confirmCancel')
   };
 
-  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
-  const lessMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
   /* ── small helpers ────────────────────────────────────── */
 
   function byOrder(a, b) {
@@ -131,10 +160,13 @@
 
   let toastTimer = null;
   function toast(message) {
+    // The region is always in the DOM; only its text changes. Toggling
+    // `hidden` meant the text was already there when the region entered the
+    // accessibility tree, and screen readers announced nothing.
     el.toast.textContent = message;
-    el.toast.hidden = false;
+    el.toast.classList.add('is-visible');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.toast.hidden = true; }, 3200);
+    toastTimer = setTimeout(() => { el.toast.classList.remove('is-visible'); }, 3200);
   }
 
   function setPill(kind, label) {
@@ -156,6 +188,20 @@
     return svg;
   }
 
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : fallback;
+    } catch (_) { return fallback; }
+  }
+
+  function writeLocal(key, value) {
+    try { localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value)); }
+    catch (_) {}
+  }
+
   /* ── local cache ──────────────────────────────────────── */
 
   function cacheRead() {
@@ -168,7 +214,45 @@
   }
 
   function cacheWrite() {
-    try { localStorage.setItem(LS.tools, JSON.stringify(state.tools)); } catch (_) {}
+    writeLocal(LS.tools, state.tools);
+  }
+
+  /* ── frecency ─────────────────────────────────────────── */
+
+  /* Per-device, localStorage only. A launch count is not a fact about the
+     tool -- it is a fact about this browser -- so it never goes near the
+     database and needs no column, no migration and no conflict rule. */
+
+  function usageScore(id) {
+    const entry = state.usage[id];
+    if (!entry || !entry.count) return 0;
+    const age = Date.now() - (entry.last || 0);
+    if (age < 0) return entry.count;
+    return entry.count * Math.pow(0.5, age / FRECENCY_HALFLIFE_MS);
+  }
+
+  function noteLaunch(id) {
+    const entry = state.usage[id] || { count: 0, last: 0 };
+    entry.count += 1;
+    entry.last = Date.now();
+    state.usage[id] = entry;
+    writeLocal(LS.usage, state.usage);
+    // Re-sorting under the user's finger mid-launch would be disorienting, so
+    // the new order lands on the next paint, not this one.
+  }
+
+  function sortedTools() {
+    const list = state.tools.slice();
+    if (state.order === 'frecency') {
+      return list.sort((a, b) => {
+        const diff = usageScore(b.id) - usageScore(a.id);
+        if (diff) return diff;
+        // Never-launched tools keep a stable, predictable order rather than
+        // shuffling on every render.
+        return a.name.localeCompare(b.name);
+      });
+    }
+    return list.sort(byOrder);
   }
 
   /* ── rendering ────────────────────────────────────────── */
@@ -184,8 +268,17 @@
 
     const card = document.createElement('a');
     card.className = 'card accent-' + tool.accent;
-    card.href = tool.url;
-    card.rel = 'noopener noreferrer';
+    // Validated again on the way out, not only on the way in. A stored
+    // `javascript:` URL would be a script-injection path straight into an
+    // href, and the page's CSP has no unsafe-inline to fall back on.
+    const safe = cloud.validUrl(tool.url);
+    if (safe) {
+      card.href = safe;
+      card.rel = 'noopener noreferrer';
+    } else {
+      card.setAttribute('role', 'link');
+      card.setAttribute('aria-disabled', 'true');
+    }
 
     const icon = document.createElement('span');
     icon.className = 'card-icon';
@@ -194,27 +287,28 @@
     else icon.textContent = tool.icon;
     card.appendChild(icon);
 
-    const name = document.createElement('h2');
+    // A wrapper so the list view can lay icon / text / host out as a row
+    // without the grid view needing a different element tree.
+    const body = document.createElement('span');
+    body.className = 'card-body';
+
+    const name = document.createElement('span');
     name.className = 'card-name';
     name.textContent = tool.name;
-    card.appendChild(name);
+    body.appendChild(name);
 
     if (tool.description) {
-      const desc = document.createElement('p');
+      const desc = document.createElement('span');
       desc.className = 'card-desc';
       desc.textContent = tool.description;
-      card.appendChild(desc);
+      body.appendChild(desc);
     }
+    card.appendChild(body);
 
-    const host = document.createElement('p');
+    const host = document.createElement('span');
     host.className = 'card-host';
     host.textContent = hostOf(tool.url);
     card.appendChild(host);
-
-    const rule = document.createElement('span');
-    rule.className = 'card-rule';
-    rule.setAttribute('aria-hidden', 'true');
-    card.appendChild(rule);
 
     slot.appendChild(card);
     if (state.signedIn) slot.appendChild(buildMenu(tool));
@@ -230,9 +324,9 @@
     const handle = document.createElement('button');
     handle.type = 'button';
     handle.className = 'icon-btn drag-handle';
-    handle.title = 'Drag to reorder (or focus and press the arrow keys)';
+    handle.title = 'Drag to reorder (or focus the card and press Alt with the arrow keys)';
     handle.setAttribute('aria-label', 'Reorder ' + tool.name);
-    handle.appendChild(svgIcon('box', 15));
+    handle.appendChild(svgIcon('ui-grip', 14));
     handle.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -244,7 +338,7 @@
     edit.className = 'icon-btn';
     edit.title = 'Edit';
     edit.setAttribute('aria-label', 'Edit ' + tool.name);
-    edit.appendChild(svgIcon('gear', 15));
+    edit.appendChild(svgIcon('ui-pencil', 14));
     edit.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -257,7 +351,7 @@
     remove.className = 'icon-btn';
     remove.title = 'Delete';
     remove.setAttribute('aria-label', 'Delete ' + tool.name);
-    remove.textContent = '✕';
+    remove.appendChild(svgIcon('ui-trash', 14));
     remove.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -270,64 +364,73 @@
   }
 
   function render() {
-    const sorted = state.tools.slice().sort(byOrder);
+    const sorted = sortedTools();
     el.grid.textContent = '';
     for (const tool of sorted) el.grid.appendChild(buildCard(tool));
 
+    el.grid.classList.toggle('view-list', state.view === 'list');
+    el.grid.classList.toggle('order-frecency', state.order === 'frecency');
     el.empty.hidden = sorted.length > 0;
+    updateCount(sorted.length);
+  }
+
+  function updateCount(n) {
+    el.count.textContent = n === 1 ? '1 tool' : n + ' tools';
   }
 
   /* ── card interactions ────────────────────────────────── */
 
   function bindCard(card, tool) {
-    // The tilt and the cursor glow only exist where there is a real pointer to
-    // drive them. On touch the CSS press-scale does the job instead.
-    if (finePointer.matches && !lessMotion.matches) {
-      let frame = 0;
-      card.addEventListener('pointermove', (event) => {
-        if (frame) return;
-        // One update per frame. A raw pointermove handler fires far faster
-        // than the compositor can use and is what makes this pattern janky
-        // on the older phones these pages get opened on.
-        frame = requestAnimationFrame(() => {
-          frame = 0;
-          const rect = card.getBoundingClientRect();
-          const px = (event.clientX - rect.left) / rect.width;
-          const py = (event.clientY - rect.top) / rect.height;
-          card.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
-          card.style.setProperty('--my', (py * 100).toFixed(1) + '%');
-          card.style.setProperty('--ry', ((px - 0.5) * TILT_DEGREES * 2).toFixed(2) + 'deg');
-          card.style.setProperty('--rx', (-(py - 0.5) * TILT_DEGREES * 2).toFixed(2) + 'deg');
-        });
-      });
-
-      card.addEventListener('pointerleave', () => {
-        cancelAnimationFrame(frame);
-        frame = 0;
-        card.style.setProperty('--rx', '0deg');
-        card.style.setProperty('--ry', '0deg');
-      });
-    }
-
     card.addEventListener('click', (event) => {
       // A drag that ended on the card must not also launch it.
       if (drag.active || drag.justDropped) {
         event.preventDefault();
         return;
       }
-      if (lessMotion.matches) return;
-      card.classList.add('launching');
-      setTimeout(() => card.classList.remove('launching'), 340);
+      noteLaunch(tool.id);
     });
 
-    // Keyboard reordering, so the drag handle is not the only way.
     card.addEventListener('keydown', (event) => {
-      if (!state.signedIn) return;
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      if (!event.altKey) return;
+      // Alt + arrows reorder; bare arrows walk the wall. Both are here rather
+      // than on the grid so the handler always knows which card it is on.
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' &&
+          event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+
+      if (event.altKey) {
+        if (!state.signedIn || state.order !== 'manual') return;
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        moveTool(tool.id, event.key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
+
       event.preventDefault();
-      moveTool(tool.id, event.key === 'ArrowLeft' ? -1 : 1);
+      focusNeighbour(card, event.key);
     });
+  }
+
+  /* Arrow-key navigation across the wall. Columns are measured from the laid
+     out DOM rather than assumed, so it follows whatever the grid actually did
+     at this width -- including the single-column phone layout and list view. */
+  function focusNeighbour(card, key) {
+    const cards = Array.from(el.grid.querySelectorAll('.card'));
+    const from = cards.indexOf(card);
+    if (from < 0) return;
+
+    let columns = 1;
+    if (cards.length > 1) {
+      const top = cards[0].getBoundingClientRect().top;
+      columns = cards.findIndex(c => c.getBoundingClientRect().top > top + 1);
+      if (columns < 1) columns = cards.length;
+    }
+
+    const step = (key === 'ArrowLeft') ? -1
+               : (key === 'ArrowRight') ? 1
+               : (key === 'ArrowUp') ? -columns : columns;
+
+    const to = from + step;
+    if (to < 0 || to >= cards.length) return;
+    cards[to].focus();
   }
 
   /* ── drag to reorder ──────────────────────────────────── */
@@ -338,7 +441,7 @@
 
   function bindDrag(handle) {
     handle.addEventListener('pointerdown', (event) => {
-      if (!state.signedIn) return;
+      if (!state.signedIn || state.order !== 'manual') return;
       event.preventDefault();
       event.stopPropagation();
 
@@ -357,9 +460,12 @@
         if (!target || target === card || target.parentNode !== el.grid) return;
 
         // Insert before or after depending on which half was entered, so a
-        // slow drag does not oscillate across the midpoint.
+        // slow drag does not oscillate across the midpoint. In list view the
+        // meaningful axis is vertical, so measure the one that matters.
         const rect = target.getBoundingClientRect();
-        const after = (moveEvent.clientX - rect.left) > rect.width / 2;
+        const after = state.view === 'list'
+          ? (moveEvent.clientY - rect.top) > rect.height / 2
+          : (moveEvent.clientX - rect.left) > rect.width / 2;
         el.grid.insertBefore(card, after ? target.nextSibling : target);
       };
 
@@ -386,7 +492,9 @@
   // actually changed are queued, so dragging one card pushes one or two rows,
   // not the whole wall.
   function commitOrder() {
-    const ids = Array.from(el.grid.children).map(node => Number(node.dataset.id));
+    const ids = Array.from(el.grid.children)
+      .filter(node => node.dataset && node.dataset.id)
+      .map(node => Number(node.dataset.id));
     let changed = false;
     ids.forEach((id, index) => {
       const tool = state.tools.find(t => t.id === id);
@@ -412,10 +520,193 @@
     });
     cacheWrite();
     render();
-    // Keep the moved card focused so a run of Alt+Arrow keeps working.
+    // Keep the moved card focused so a run of Alt+Arrow keeps working, and say
+    // where it landed -- a silent reorder tells a screen reader nothing.
     const moved = el.grid.querySelector('.card-slot[data-id="' + id + '"] .card');
     if (moved) moved.focus();
+    const tool = state.tools.find(t => t.id === id);
+    if (tool) toast(tool.name + ' moved to position ' + (to + 1) + ' of ' + sorted.length + '.');
     queueSave();
+  }
+
+  /* ── command palette ──────────────────────────────────── */
+
+  /* Type two letters, press Enter. This is the primary way into a tool once
+     the wall grows past a handful, and the reason the wall itself can afford
+     to be quiet. */
+
+  function paletteActions() {
+    const actions = [
+      { kind: 'action', id: 'a-add', name: 'Add tool', hint: 'Create a new card', icon: 'ui-plus', run: () => openToolDialog(null) },
+      { kind: 'action', id: 'a-view', name: state.view === 'grid' ? 'Switch to list view' : 'Switch to grid view',
+        hint: 'Change how the wall is laid out', icon: state.view === 'grid' ? 'ui-list' : 'ui-grid',
+        run: () => setView(state.view === 'grid' ? 'list' : 'grid') },
+      { kind: 'action', id: 'a-order', name: state.order === 'manual' ? 'Sort by most used' : 'Sort manually',
+        hint: 'Change the order of the wall', icon: 'ui-clock',
+        run: () => setOrder(state.order === 'manual' ? 'frecency' : 'manual') },
+      { kind: 'action', id: 'a-theme', name: 'Switch theme', hint: 'System, light or dark', icon: 'ui-sun', run: cycleTheme }
+    ];
+    if (cloud.configured()) {
+      actions.push(state.signedIn
+        ? { kind: 'action', id: 'a-out', name: 'Sign out', hint: state.email, icon: 'ui-user', run: signOut }
+        : { kind: 'action', id: 'a-in', name: 'Sign in', hint: 'Manage and sync your cards', icon: 'ui-user', run: openAuthDialog });
+    }
+    return actions;
+  }
+
+  /* Ranked, not merely filtered. A launcher is judged on whether the thing you
+     meant is the first row after two keystrokes, so a prefix on the name beats
+     a hit buried in a description. */
+  function scoreMatch(text, query) {
+    if (!text) return 0;
+    const haystack = text.toLowerCase();
+    const at = haystack.indexOf(query);
+    if (at === 0) return 100;
+    if (at > 0) return /\s/.test(haystack.charAt(at - 1)) ? 70 : 40;
+    return 0;
+  }
+
+  function paletteMatches(query) {
+    const q = query.trim().toLowerCase();
+    const tools = sortedTools().map(tool => ({
+      kind: 'tool', id: 't-' + tool.id, tool,
+      name: tool.name, hint: tool.description || hostOf(tool.url)
+    }));
+    const actions = paletteActions();
+
+    if (!q) {
+      // With no query the wall's own order is the honest default -- and in
+      // "most used" mode that is already the ranking the user asked for.
+      return tools.concat(actions);
+    }
+
+    const rank = (item) => {
+      const base = Math.max(
+        scoreMatch(item.name, q) * 3,
+        scoreMatch(item.hint, q),
+        item.tool ? scoreMatch(hostOf(item.tool.url), q) : 0
+      );
+      if (!base) return 0;
+      // A tie between two tools is broken by how often you actually open them.
+      return base + (item.tool ? Math.min(usageScore(item.tool.id), 20) : 0);
+    };
+
+    return tools.concat(actions)
+      .map(item => ({ item, score: rank(item) }))
+      .filter(entry => entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(entry => entry.item);
+  }
+
+  function renderPalette() {
+    const items = state.palette.items;
+    el.paletteList.textContent = '';
+
+    if (!items.length) {
+      const empty = document.createElement('li');
+      empty.className = 'palette-empty';
+      empty.textContent = 'No tools or actions match that.';
+      el.paletteList.appendChild(empty);
+      el.paletteInput.removeAttribute('aria-activedescendant');
+      return;
+    }
+
+    let lastKind = null;
+    items.forEach((item, index) => {
+      if (item.kind !== lastKind) {
+        const group = document.createElement('li');
+        group.className = 'palette-group';
+        group.setAttribute('role', 'presentation');
+        group.textContent = item.kind === 'tool' ? 'Tools' : 'Actions';
+        el.paletteList.appendChild(group);
+        lastKind = item.kind;
+      }
+
+      const row = document.createElement('li');
+      row.className = 'palette-item';
+      row.id = 'palette-' + item.id;
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', String(index === state.palette.index));
+
+      if (item.kind === 'tool') {
+        const icon = document.createElement('span');
+        icon.className = 'card-icon accent-' + item.tool.accent;
+        icon.setAttribute('aria-hidden', 'true');
+        if (item.tool.iconKind === 'svg') icon.appendChild(svgIcon(item.tool.icon));
+        else icon.textContent = item.tool.icon;
+        row.appendChild(icon);
+      } else {
+        const icon = document.createElement('span');
+        icon.className = 'palette-action-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.appendChild(svgIcon(item.icon, 15));
+        row.appendChild(icon);
+      }
+
+      const text = document.createElement('span');
+      text.className = 'palette-text';
+      const name = document.createElement('span');
+      name.className = 'palette-name';
+      name.textContent = item.name;
+      text.appendChild(name);
+      if (item.hint) {
+        const sub = document.createElement('span');
+        sub.className = 'palette-sub';
+        sub.textContent = item.hint;
+        text.appendChild(sub);
+      }
+      row.appendChild(text);
+
+      row.addEventListener('click', () => choosePalette(index));
+      el.paletteList.appendChild(row);
+    });
+
+    const selected = items[state.palette.index];
+    if (selected) el.paletteInput.setAttribute('aria-activedescendant', 'palette-' + selected.id);
+  }
+
+  function movePalette(step) {
+    const total = state.palette.items.length;
+    if (!total) return;
+    state.palette.index = (state.palette.index + step + total) % total;
+    renderPalette();
+    const active = el.paletteList.querySelector('[aria-selected="true"]');
+    if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest' });
+  }
+
+  function choosePalette(index) {
+    const item = state.palette.items[index];
+    if (!item) return;
+    closePalette();
+    if (item.kind === 'tool') {
+      const safe = cloud.validUrl(item.tool.url);
+      if (!safe) { toast('That card has no usable https:// address.'); return; }
+      noteLaunch(item.tool.id);
+      window.location.href = safe;
+      return;
+    }
+    item.run();
+  }
+
+  function refreshPalette() {
+    state.palette.items = paletteMatches(el.paletteInput.value);
+    state.palette.index = 0;
+    renderPalette();
+  }
+
+  function openPalette() {
+    if (state.palette.open) return;
+    state.palette.open = true;
+    el.paletteInput.value = '';
+    refreshPalette();
+    el.paletteDialog.showModal();
+    el.paletteInput.focus();
+  }
+
+  function closePalette() {
+    if (!state.palette.open) return;
+    state.palette.open = false;
+    el.paletteDialog.close();
   }
 
   /* ── the tool editor ──────────────────────────────────── */
@@ -427,6 +718,7 @@
       button.type = 'button';
       button.className = 'pick';
       button.textContent = emoji;
+      button.setAttribute('aria-label', 'Use ' + emoji);
       button.setAttribute('aria-pressed',
         String(state.draft.iconKind === 'emoji' && state.draft.icon === emoji));
       button.addEventListener('click', () => {
@@ -447,7 +739,7 @@
       button.setAttribute('aria-label', glyph);
       button.setAttribute('aria-pressed',
         String(state.draft.iconKind === 'svg' && state.draft.icon === glyph));
-      button.appendChild(svgIcon(glyph, 22));
+      button.appendChild(svgIcon(glyph, 20));
       button.addEventListener('click', () => {
         state.draft.icon = glyph;
         state.draft.iconKind = 'svg';
@@ -471,11 +763,39 @@
       el.accentPicks.appendChild(button);
     }
 
-    const emojiActive = state.draft.iconKind === 'emoji';
+    setIconTab(state.draft.iconKind === 'emoji' ? 'emoji' : 'svg', false);
+  }
+
+  /* A real tab pattern: aria-controls, a roving tabindex and arrow keys. The
+     old markup announced "tab" and then behaved like two ordinary buttons,
+     which is worse than no roles at all. */
+  function setIconTab(kind, focusTab) {
+    const emojiActive = kind === 'emoji';
+    state.draft.iconKind = kind;
+
     el.tabEmoji.setAttribute('aria-selected', String(emojiActive));
     el.tabSvg.setAttribute('aria-selected', String(!emojiActive));
+    el.tabEmoji.tabIndex = emojiActive ? 0 : -1;
+    el.tabSvg.tabIndex = emojiActive ? -1 : 0;
     el.emojiPane.hidden = !emojiActive;
     el.svgPane.hidden = emojiActive;
+
+    if (focusTab) (emojiActive ? el.tabEmoji : el.tabSvg).focus();
+  }
+
+  function onTabKey(event) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' &&
+        event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    const toEmoji = event.key === 'Home' ? true
+                  : event.key === 'End' ? false
+                  : el.tabEmoji.getAttribute('aria-selected') !== 'true';
+    const kind = toEmoji ? 'emoji' : 'svg';
+    // paintPicks() re-reads the draft and re-applies the tab state, so set the
+    // kind first, repaint, then move focus onto the tab that is now selected.
+    setIconTab(kind, false);
+    paintPicks();
+    setIconTab(kind, true);
   }
 
   function openToolDialog(id) {
@@ -567,10 +887,30 @@
     state.tools = state.tools.filter(tool => tool.id !== id);
     state.dirty.delete(id);
     state.removed.add(id);
+    delete state.usage[id];
+    writeLocal(LS.usage, state.usage);
     cacheWrite();
     render();
     queueSave();
     toast('Card deleted.');
+  }
+
+  /* ── view and order preferences ───────────────────────── */
+
+  function setView(view) {
+    state.view = view === 'list' ? 'list' : 'grid';
+    writeLocal(LS.view, state.view);
+    el.viewGrid.setAttribute('aria-pressed', String(state.view === 'grid'));
+    el.viewList.setAttribute('aria-pressed', String(state.view === 'list'));
+    render();
+  }
+
+  function setOrder(order) {
+    state.order = order === 'frecency' ? 'frecency' : 'manual';
+    writeLocal(LS.order, state.order);
+    el.orderManual.setAttribute('aria-pressed', String(state.order === 'manual'));
+    el.orderFrecency.setAttribute('aria-pressed', String(state.order === 'frecency'));
+    render();
   }
 
   /* ── sync ─────────────────────────────────────────────── */
@@ -692,12 +1032,24 @@
     }
   }
 
+  async function signOut() {
+    await cloud.signOut();
+    // The wall stays exactly as it is — it is in localStorage too. Only the
+    // pending cloud delta is dropped, because there is no longer an account
+    // to push it to.
+    state.dirty.clear();
+    state.removed.clear();
+    applySession(null);
+    toast('Signed out. Your cards stay on this device.');
+  }
+
   function applySession(session) {
     state.signedIn = !!session;
     state.email = session && session.user ? session.user.email || '' : '';
-    el.authBtn.textContent = state.signedIn ? 'Sign out' : 'Sign in';
     // The account is worth showing, but on the control that acts on it rather
     // than as a line of prose under the cards.
+    el.authBtn.setAttribute('aria-label',
+      state.signedIn ? 'Sign out (' + state.email + ')' : 'Sign in to manage and sync your cards');
     el.authBtn.title = state.signedIn
       ? 'Signed in as ' + state.email
       : 'Sign in to manage and sync your cards';
@@ -707,36 +1059,86 @@
 
   /* ── theme ────────────────────────────────────────────── */
 
-  function applyThemeLabel() {
-    const dark = document.documentElement.classList.contains('theme-dark');
+  /* Three states, not two. The old build hardcoded dark on <html> and never
+     consulted the OS at all, so anyone on a light desktop got dark until they
+     found the toggle. `system` is the default and the stylesheet handles it;
+     an explicit choice writes data-theme and wins in both directions. */
+
+  const THEME_ORDER = ['system', 'light', 'dark'];
+  const THEME_LABEL = { system: 'follow system', light: 'light', dark: 'dark' };
+  const THEME_ICON  = { system: 'ui-system', light: 'ui-sun', dark: 'ui-moon' };
+
+  function applyTheme(theme) {
+    state.theme = THEME_ORDER.indexOf(theme) >= 0 ? theme : 'system';
+    const root = document.documentElement;
+    if (state.theme === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', state.theme);
+
+    writeLocal(LS.theme, state.theme);
+    el.themeIcon.setAttribute('href', '#hut-' + THEME_ICON[state.theme]);
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(state.theme) + 1) % THEME_ORDER.length];
     el.themeBtn.setAttribute('aria-label',
-      dark ? 'Switch to light mode' : 'Switch to dark mode');
+      'Theme: ' + THEME_LABEL[state.theme] + '. Switch to ' + THEME_LABEL[next] + '.');
   }
 
-  function toggleTheme() {
-    const root = document.documentElement;
-    const dark = root.classList.toggle('theme-dark');
-    try { localStorage.setItem(LS.theme, dark ? 'dark' : 'light'); } catch (_) {}
-    applyThemeLabel();
+  function cycleTheme() {
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(state.theme) + 1) % THEME_ORDER.length];
+    applyTheme(next);
+    toast('Theme: ' + THEME_LABEL[next] + '.');
   }
 
   /* ── wiring ───────────────────────────────────────────── */
 
   el.addBtn.addEventListener('click', () => openToolDialog(null));
+  el.emptyAdd.addEventListener('click', () => openToolDialog(null));
+  el.searchBtn.addEventListener('click', openPalette);
+  el.themeBtn.addEventListener('click', cycleTheme);
 
   el.authBtn.addEventListener('click', async () => {
     if (!state.signedIn) { openAuthDialog(); return; }
-    await cloud.signOut();
-    // The wall stays exactly as it is — it is in localStorage too. Only the
-    // pending cloud delta is dropped, because there is no longer an account
-    // to push it to.
-    state.dirty.clear();
-    state.removed.clear();
-    applySession(null);
-    toast('Signed out. Your cards stay on this device.');
+    await signOut();
   });
 
-  el.themeBtn.addEventListener('click', toggleTheme);
+  el.viewGrid.addEventListener('click', () => setView('grid'));
+  el.viewList.addEventListener('click', () => setView('list'));
+  el.orderManual.addEventListener('click', () => setOrder('manual'));
+  el.orderFrecency.addEventListener('click', () => setOrder('frecency'));
+
+  el.paletteInput.addEventListener('input', refreshPalette);
+  el.paletteInput.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); movePalette(1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); movePalette(-1); }
+    else if (event.key === 'Home') { event.preventDefault(); state.palette.index = 0; renderPalette(); }
+    else if (event.key === 'End') { event.preventDefault(); state.palette.index = Math.max(0, state.palette.items.length - 1); renderPalette(); }
+    else if (event.key === 'Enter') { event.preventDefault(); choosePalette(state.palette.index); }
+  });
+  // Escape and backdrop dismissal both go through the native dialog, so keep
+  // our own flag in step with it however it was closed.
+  el.paletteDialog.addEventListener('close', () => { state.palette.open = false; });
+  el.paletteDialog.addEventListener('click', (event) => {
+    if (event.target === el.paletteDialog) closePalette();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const key = event.key.toLowerCase();
+    if ((event.metaKey || event.ctrlKey) && key === 'k') {
+      event.preventDefault();
+      state.palette.open ? closePalette() : openPalette();
+      return;
+    }
+    // A bare "/" opens search too, but only when the user is not already
+    // typing into something.
+    if (key === '/' && !state.palette.open && !isTyping(event.target)) {
+      event.preventDefault();
+      openPalette();
+    }
+  });
+
+  function isTyping(node) {
+    if (!node) return false;
+    const tag = node.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || node.isContentEditable;
+  }
 
   el.toolForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -748,8 +1150,10 @@
     el.toolDialog.close();
     if (id != null) askDelete(id);
   });
-  el.tabEmoji.addEventListener('click', () => { state.draft.iconKind = 'emoji'; paintPicks(); });
-  el.tabSvg.addEventListener('click', () => { state.draft.iconKind = 'svg'; paintPicks(); });
+  el.tabEmoji.addEventListener('click', () => { setIconTab('emoji', false); paintPicks(); });
+  el.tabSvg.addEventListener('click', () => { setIconTab('svg', false); paintPicks(); });
+  el.tabEmoji.addEventListener('keydown', onTabKey);
+  el.tabSvg.addEventListener('keydown', onTabKey);
 
   el.authForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -771,12 +1175,28 @@
   /* ── boot ─────────────────────────────────────────────── */
 
   async function boot() {
-    applyThemeLabel();
+    // The shortcut hint has to match the keyboard actually in front of you.
+    const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+    el.searchKbd.textContent = mac ? '⌘K' : 'Ctrl K';
+
+    let storedTheme = 'system';
+    try { storedTheme = localStorage.getItem(LS.theme) || 'system'; } catch (_) {}
+    applyTheme(storedTheme);
+
+    state.usage = readJson(LS.usage, {});
+    let storedView = 'grid', storedOrder = 'manual';
+    try {
+      storedView = localStorage.getItem(LS.view) || 'grid';
+      storedOrder = localStorage.getItem(LS.order) || 'manual';
+    } catch (_) {}
 
     // Paint before touching the network: cache first, constants if there is no
     // cache. The wall is usable and launchable before Supabase answers.
     state.tools = cacheRead() || DEFAULT_TOOLS.map(tool => ({ ...tool }));
-    render();
+
+    // Each of these renders once; the last one is the paint that counts.
+    setView(storedView);
+    setOrder(storedOrder);
 
     if (!cloud.configured()) {
       // The pill is the whole status surface. In a deployed build this branch
@@ -805,6 +1225,9 @@
     state,
     render,
     addTool: () => openToolDialog(null),
+    openPalette,
+    setView,
+    setOrder,
     DEFAULT_TOOLS
   };
 })();

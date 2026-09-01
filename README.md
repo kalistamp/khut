@@ -30,6 +30,10 @@ person, so this uses the plain upsert model from the `lists` schema.
 cache and the signed-out view — not the record. Signing in pulls from the
 database over the top of it.
 
+It also holds what is deliberately *not* a record: `hut.usage` (launch counts),
+`hut.view`, `hut.order` and `hut.theme`. Those are per-device preferences, so
+they never reach the database.
+
 ### Launching is open; managing is not
 
 Viewing the wall and clicking through to a tool never require a sign-in — that
@@ -159,22 +163,86 @@ Neither end trusts the other to have checked. A stored `javascript:` URL would
 otherwise be a script-injection path into the page, and the page's CSP has no
 `unsafe-inline` to fall back on.
 
+## Finding a tool
+
+The wall is an index, not a display case. There are three ways in, and the
+keyboard is the fast one:
+
+| | |
+|---|---|
+| `Ctrl`/`⌘` + `K`, or `/` | Open the command palette |
+| type, then `↵` | Launch the first match |
+| `↑` `↓` | Move through results |
+| arrow keys on a focused card | Walk the wall |
+| `Alt` + `←`/`→` on a focused card | Reorder it (manual order only) |
+
+The palette searches names, descriptions and hosts, and ranks a prefix on the
+name above a hit buried in a description — a launcher is judged on whether the
+thing you meant is the first row after two keystrokes. It also carries the
+actions (add, theme, view, order, sign in/out), so the toolbar never has to
+grow a button for something used twice a month.
+
+**Sort order** is either `Manual` — the `sortOrder` column, dragged or nudged
+with `Alt`+arrows — or `Most used`, a frecency score where a launch a week old
+counts half as much as one today. **View** is a dense grid or a compact list.
+
+Both of those, and the launch counts behind `Most used`, are `localStorage`
+only. They are per-device preferences rather than records: how you reach a tool
+on this phone is not a fact about the tool, so it needs no column, no migration
+and no conflict rule.
+
 ## Design notes
 
-The card motion — the tilt, the cursor-tracked glow, the icon pop — is bound
-behind `(hover: hover) and (pointer: fine)`, so a phone never parses a tilt it
-has no pointer to drive and gets a press-scale instead. Everything animates on
-`transform` and `opacity` only, and `prefers-reduced-motion: reduce` collapses
-the whole motion layer to colour and opacity.
+### Colour
+
+Semantic paired tokens — `--bg` / `--surface` / `--surface-2` /
+`--surface-sunken`, `--fg` / `--fg-muted` / `--fg-subtle`, `--border` /
+`--border-strong`, `--primary` / `--on-primary`, `--ring` — matching the
+standard the `dough` app set. Elevation comes from surface lightness, not from
+stacked shadows.
+
+Every pair is contrast-checked rather than eyeballed: body text clears 4.5:1 on
+whatever surface it sits on, and control boundaries and the focus ring clear
+3:1. The focus ring is its own `--ring` token and never the card's accent — an
+accent-coloured ring measured 1.6:1 on a citrus card, invisible exactly when a
+keyboard user needs it.
+
+Each card's accent is confined to its **icon tile**, as an explicit
+tile-plus-glyph hex pair per theme. A wall where every card is a coloured panel
+has no hierarchy, and a guessed alpha is how the previous palette ended up with
+white glyphs at 1.6:1 on citrus.
 
 The stylesheet deliberately avoids `oklch`, `color-mix`, `backdrop-filter` and
 container queries, for the same reason the `dough` app does: these pages get
 opened on older phones, where a half-supported colour function degrades to
 something unreadable rather than something plain.
 
-Reordering is Pointer Events, not HTML5 drag-and-drop, because HTML5 DnD does
-not fire on touch at all. `Alt` + `←`/`→` on a focused card does the same job
-from the keyboard.
+### Theme
+
+Three states, not two: `system` is the default and follows the OS; `light` and
+`dark` write `data-theme` on `<html>` and win over it in both directions. Every
+token is defined on bare `:root` first, so no colour has its only definition
+inside a media query. The CSP-hashed boot script only has to write the
+attribute when the user has actually chosen — **its hash in the CSP must be
+recomputed whenever that script changes.**
+
+### Motion
+
+Launching a tool is this app's 100+/day action, so it is not animated at all: a
+bounce seen twenty times a day is friction, and the page navigates away before
+it finishes. Hovers are a 120ms colour change. What remains animates on
+`transform` and `opacity` only.
+
+`prefers-reduced-motion: reduce` drops the transforms and the pulse but keeps
+the opacity and colour changes that carry meaning — reduced motion means
+gentler, not absent, and blanket-killing every transition removes information.
+
+### Reordering
+
+Pointer Events, not HTML5 drag-and-drop, because HTML5 DnD does not fire on
+touch at all. `Alt` + `←`/`→` on a focused card does the same job from the
+keyboard and announces where the card landed. Both are disabled in `Most used`
+order, where a drag handle would promise something it cannot keep.
 
 ## Tests
 

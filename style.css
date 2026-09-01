@@ -1,111 +1,225 @@
 /* ============================================================
-   KALISTAMP HUT — Lantern Hut
+   KALISTAMP HUT — fast index
 
-   A warm, dark workshop wall; each tool is an enamel tag hanging on it.
+   A launcher you open twenty times a day. The wall is an index, not a
+   display case: neutral surfaces, one accent per card confined to its icon
+   tile, and no motion on the paths you walk most often.
 
-   Deliberately conservative CSS. No oklch, no colour-mix, no backdrop-filter,
-   no container queries — the same call the dough app made, for the same
-   reason: these pages get opened on older phones and a half-supported colour
-   function degrades to something unreadable rather than something plain.
+   MOTION BUDGET
+     Launching a tool is this app's 100+/day action, so it is not animated at
+     all -- a bounce you see twenty times a day is friction, and the page
+     navigates away before it finishes anyway. Hovers are "tens daily", so
+     they are a 120ms colour change and nothing more. What is left animates on
+     `transform` and `opacity` only, and `prefers-reduced-motion` drops the
+     transforms while keeping the colour and opacity that carry meaning.
 
-   Everything that moves, moves on `transform` or `opacity` only, so a card
-   hover never triggers layout. The tilt and the cursor glow are bound behind
-   `(hover: hover) and (pointer: fine)` — a touch device gets a press-scale
-   instead of a tilt that would need a pointer it does not have — and the whole
-   motion layer collapses under `prefers-reduced-motion`.
+   COLOUR
+     Every value is hex and every pair is contrast-checked: body text >= 4.5:1
+     on the surface it sits on, control boundaries and the focus ring >= 3:1.
+     No oklch, no color-mix, no backdrop-filter, no container queries -- these
+     pages get opened on older phones, where a half-supported colour function
+     degrades to something unreadable rather than something plain.
+
+   THEME
+     Three states. `system` is the default and follows the OS; an explicit
+     choice writes data-theme on <html> and wins over it in both directions.
+     Every token is defined on bare :root first, so no colour has its only
+     definition inside a media query.
    ============================================================ */
 
 /* ── tokens ─────────────────────────────────────────────── */
 
 :root {
-  --ground:      #f6f1e8;
-  --ground-2:    #efe7da;
-  --surface:     #fffdf9;
-  --surface-2:   #f3ece1;
-  --line:        #ded2c0;
-  --line-soft:   #e9e0d2;
-  --ink:         #2a2118;
-  --ink-soft:    #6b5d4c;
-  --ink-faint:   #93826d;
-  --lantern:     rgba(255, 186, 92, .30);
-  --shadow:      rgba(74, 56, 32, .16);
-  --shadow-lift: rgba(74, 56, 32, .26);
-  --danger:      #b3392b;
-  --ok:          #2f7d54;
+  /* surfaces, lightest to deepest. Elevation comes from surface lightness,
+     not from stacked shadows. */
+  --bg:            #f7f6f3;
+  --surface:       #ffffff;
+  --surface-2:     #f1efea;   /* hover / raised */
+  --surface-sunken:#eeece6;   /* inputs, wells */
 
-  --radius:      18px;
-  --radius-sm:   11px;
-  --tap:         44px;
+  /* text, in descending emphasis. All three clear 4.5:1 on bg, surface
+     and surface-2. */
+  --fg:            #1c1a17;
+  --fg-muted:      #5c564c;
+  --fg-subtle:     #6b6458;
 
-  --ease:        cubic-bezier(.22, .8, .28, 1);
-  --spring:      cubic-bezier(.34, 1.56, .48, 1);
+  --border:        #ddd8cf;   /* decorative separation */
+  --border-strong: #8d8479;   /* control boundaries -- >= 3:1 everywhere */
+
+  --primary:       #a8480f;
+  --on-primary:    #ffffff;
+  --primary-soft:  #fbeade;
+
+  --ring:          #b4531a;   /* >= 3:1 on every surface, both themes */
+
+  --ok:            #1d6b45;
+  --warn:          #8a5406;
+  --danger:        #a3301f;
+  --danger-soft:   #fbe7e3;
+
+  /* radius: one knob, the rest derived */
+  --radius:        12px;
+  --radius-sm:     8px;
+  --radius-lg:     16px;
+  --radius-pill:   999px;
+
+  /* spacing */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s7: 32px; --s8: 44px;
+
+  --tap: 44px;
+
+  /* Easing. ease-out for entrances and feedback, a gentle curve for hover.
+     Never ease-in on UI: it starts slow, delaying the exact moment the user
+     is watching. */
+  --ease-out:   cubic-bezier(.23, 1, .32, 1);
+  --ease-hover: cubic-bezier(.25, .46, .45, .94);
+
+  --t-hover:  120ms;
+  --t-press:  140ms;
+  --t-enter:  180ms;
+
+  color-scheme: light;
 }
 
-.theme-dark {
-  --ground:      #0e0c0b;
-  --ground-2:    #17130f;
-  --surface:     #1b1613;
-  --surface-2:   #241d18;
-  --line:        #362c24;
-  --line-soft:   #2a221c;
-  --ink:         #f6ece0;
-  --ink-soft:    #b8a894;
-  --ink-faint:   #8a7967;
-  --lantern:     rgba(255, 172, 74, .16);
-  --shadow:      rgba(0, 0, 0, .5);
-  --shadow-lift: rgba(0, 0, 0, .66);
-  --danger:      #ef6a58;
-  --ok:          #63c48d;
+/* System dark: applies unless the user has explicitly chosen light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:            #100e0c;
+    --surface:       #191613;
+    --surface-2:     #221e1a;
+    --surface-sunken:#0c0a09;
+
+    --fg:            #f4efe8;
+    --fg-muted:      #b0a798;
+    --fg-subtle:     #9a9082;
+
+    --border:        #332c25;
+    --border-strong: #6d6356;
+
+    --primary:       #ff8a3d;
+    --on-primary:    #241206;
+    --primary-soft:  #341f0e;
+
+    --ring:          #ff9d57;
+
+    --ok:            #5cc98d;
+    --warn:          #e0a03c;
+    --danger:        #f0705c;
+    --danger-soft:   #3a1a15;
+
+    color-scheme: dark;
+  }
 }
 
-/* Accent pairs. Each card sets one of these classes; nothing ever writes a
-   colour into a style attribute, so the accent column can stay a CHECK-
-   constrained enum and an unknown value simply falls back to ember. */
-.accent-ember  { --a1: #ff8a3d; --a2: #ff4d6d; --glow: rgba(255, 122, 64, .30); }
-.accent-citrus { --a1: #ffc531; --a2: #ff8f2e; --glow: rgba(255, 190, 54, .30); }
-.accent-mint   { --a1: #45d9a4; --a2: #16a3c4; --glow: rgba(64, 214, 165, .28); }
-.accent-lagoon { --a1: #4aa8ff; --a2: #6f5bff; --glow: rgba(80, 160, 255, .30); }
-.accent-orchid { --a1: #c778ff; --a2: #ff5fa8; --glow: rgba(199, 120, 255, .30); }
-.accent-slate  { --a1: #93a4b8; --a2: #5b6b80; --glow: rgba(147, 164, 184, .26); }
+/* Explicit dark: wins regardless of the OS setting. */
+:root[data-theme="dark"] {
+  --bg:            #100e0c;
+  --surface:       #191613;
+  --surface-2:     #221e1a;
+  --surface-sunken:#0c0a09;
+
+  --fg:            #f4efe8;
+  --fg-muted:      #b0a798;
+  --fg-subtle:     #9a9082;
+
+  --border:        #332c25;
+  --border-strong: #6d6356;
+
+  --primary:       #ff8a3d;
+  --on-primary:    #241206;
+  --primary-soft:  #341f0e;
+
+  --ring:          #ff9d57;
+
+  --ok:            #5cc98d;
+  --warn:          #e0a03c;
+  --danger:        #f0705c;
+  --danger-soft:   #3a1a15;
+
+  color-scheme: dark;
+}
+
+/* Accents. Each card sets one class; nothing ever writes a colour into a
+   style attribute, so the accent column stays a CHECK-constrained enum and an
+   unknown value falls back to ember.
+
+   The accent is confined to the icon tile. A wall where every card is a
+   coloured panel has no hierarchy -- everything shouts, so nothing reads.
+   Tile and glyph are explicit hex per theme rather than a tint over the
+   surface, because color-mix is off the table and a guessed alpha is how the
+   old palette ended up with white glyphs at 1.6:1. */
+.accent-ember  { --tile: #fdeade; --glyph: #8f430f; }
+.accent-citrus { --tile: #fbeecd; --glyph: #7a5205; }
+.accent-mint   { --tile: #d9f4e7; --glyph: #0b6448; }
+.accent-lagoon { --tile: #e0ecfd; --glyph: #124e93; }
+.accent-orchid { --tile: #f3e5fd; --glyph: #732ba0; }
+.accent-slate  { --tile: #e6eaef; --glyph: #3d4f64; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .accent-ember  { --tile: #341f0e; --glyph: #ff9e5c; }
+  :root:not([data-theme="light"]) .accent-citrus { --tile: #2f2609; --glyph: #f0b73a; }
+  :root:not([data-theme="light"]) .accent-mint   { --tile: #0e2b21; --glyph: #52d9a6; }
+  :root:not([data-theme="light"]) .accent-lagoon { --tile: #101f33; --glyph: #6cb6ff; }
+  :root:not([data-theme="light"]) .accent-orchid { --tile: #271335; --glyph: #c98cf5; }
+  :root:not([data-theme="light"]) .accent-slate  { --tile: #1d232b; --glyph: #a3b4c7; }
+}
+
+:root[data-theme="dark"] .accent-ember  { --tile: #341f0e; --glyph: #ff9e5c; }
+:root[data-theme="dark"] .accent-citrus { --tile: #2f2609; --glyph: #f0b73a; }
+:root[data-theme="dark"] .accent-mint   { --tile: #0e2b21; --glyph: #52d9a6; }
+:root[data-theme="dark"] .accent-lagoon { --tile: #101f33; --glyph: #6cb6ff; }
+:root[data-theme="dark"] .accent-orchid { --tile: #271335; --glyph: #c98cf5; }
+:root[data-theme="dark"] .accent-slate  { --tile: #1d232b; --glyph: #a3b4c7; }
 
 /* ── base ───────────────────────────────────────────────── */
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* dvh tracks the collapsing mobile URL bar; vh is the fallback for
+     browsers that do not know it. */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--ground);
-  color: var(--ink);
-  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
         "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
 
-/* The overhead lantern. One fixed, non-interactive layer so the warm pool of
-   light stays put while the wall scrolls under it. */
-.lantern {
-  position: fixed;
-  inset: -20% -20% auto -20%;
-  height: 70vh;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(60% 60% at 50% 0%, var(--lantern), transparent 72%);
-}
-
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
-:focus-visible {
-  outline: 2px solid var(--a1, #ff8a3d);
-  outline-offset: 2px;
-  border-radius: 6px;
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-/* ── topbar ─────────────────────────────────────────────── */
+/* One ring token, never the card's own accent. The old rule inherited the
+   accent, which put a 1.6:1 focus indicator on citrus cards -- invisible
+   exactly when a keyboard user needs it most. The outer band keeps the ring
+   legible against both the card and the page behind it. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── app shell ──────────────────────────────────────────── */
 
 .topbar {
   position: sticky;
@@ -113,378 +227,507 @@ body {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 14px clamp(14px, 4vw, 34px);
-  background: var(--ground);
-  border-bottom: 1px solid var(--line-soft);
+  gap: var(--s3);
+  padding: var(--s3) clamp(var(--s3), 3vw, var(--s6));
+  /* viewport-fit=cover opts into the notch region, so pad back out of it. */
+  padding-left: max(clamp(12px, 3vw, 24px), env(safe-area-inset-left));
+  padding-right: max(clamp(12px, 3vw, 24px), env(safe-area-inset-right));
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-right: auto;
-  color: var(--ink);
+  gap: var(--s2);
+  margin: 0;
+  font-size: .95rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--fg);
+  white-space: nowrap;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  color: #fff;
-  background: linear-gradient(135deg, #ff8a3d, #ff4d6d);
-  box-shadow: 0 4px 14px rgba(255, 110, 70, .35);
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--on-primary);
+  background: var(--primary);
 }
 
-.brand-text { font-size: 1.06rem; letter-spacing: .2px; color: var(--ink-soft); }
-.brand-text b { color: var(--ink); font-weight: 700; }
+.brand-text b { font-weight: 600; }
+.brand-text span { color: var(--fg-muted); font-weight: 500; }
 
-.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
+}
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--s5) clamp(var(--s3), 3vw, var(--s6)) var(--s8);
+  padding-left: max(clamp(12px, 3vw, 24px), env(safe-area-inset-left));
+  padding-right: max(clamp(12px, 3vw, 24px), env(safe-area-inset-right));
+  padding-bottom: max(44px, env(safe-area-inset-bottom));
+}
+
+/* ── search trigger ─────────────────────────────────────── */
+
+/* Looks like a field, is a button. The palette is the real input; this is the
+   discoverable way in for anyone who does not know the shortcut. */
+.search-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 36px;
+  width: min(280px, 34vw);
+  padding: 0 var(--s2) 0 var(--s3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg-subtle);
+  font: inherit;
+  font-size: .875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t-hover) var(--ease-hover),
+              background var(--t-hover) var(--ease-hover);
+}
+.search-trigger:hover { background: var(--surface-2); }
+.search-trigger svg { width: 15px; height: 15px; flex: none; }
+.search-trigger .search-label { flex: 1; }
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--fg-subtle);
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
 
 /* ── buttons ────────────────────────────────────────────── */
 
 .btn {
-  min-height: var(--tap);
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 0 15px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: var(--s2);
+  padding: 0 var(--s3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
   background: var(--surface);
-  color: var(--ink);
+  color: var(--fg);
   font: inherit;
-  font-size: .92rem;
-  font-weight: 600;
+  font-size: .875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform .14s var(--ease), border-color .14s var(--ease),
-              background .14s var(--ease);
+  white-space: nowrap;
+  transition: background var(--t-hover) var(--ease-hover),
+              border-color var(--t-hover) var(--ease-hover),
+              transform var(--t-press) var(--ease-out);
 }
-
-.btn:hover { border-color: var(--ink-faint); }
-.btn:active { transform: scale(.96); }
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: scale(.97); }
+.btn svg { width: 16px; height: 16px; }
 
 .btn-primary {
   border-color: transparent;
-  color: #23150c;
-  background: linear-gradient(135deg, #ffb03d, #ff7043);
-  box-shadow: 0 3px 12px rgba(255, 130, 60, .30);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
 }
-.btn-primary:hover { border-color: transparent; filter: brightness(1.06); }
+.btn-primary:hover { background: var(--primary); filter: brightness(1.08); }
 
 .btn-danger { color: var(--danger); border-color: var(--danger); background: transparent; }
-.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: var(--danger-soft); }
 
-.btn-icon { width: var(--tap); padding: 0; }
+.btn-icon { width: 36px; padding: 0; }
+
+/* Controls smaller than the 44px target get their hit area back with a
+   transparent overlay, so the visual box stays compact without making the
+   control hard to hit on a phone. */
+.btn-icon::before,
+.icon-btn::before {
+  content: "";
+  position: absolute;
+  top: 50%; left: 50%;
+  width: var(--tap); height: var(--tap);
+  transform: translate(-50%, -50%);
+}
+.btn-icon, .icon-btn { position: relative; }
 
 /* ── sync pill ──────────────────────────────────────────── */
 
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  color: var(--ink-soft);
+  gap: var(--s2);
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg-muted);
   font-size: .78rem;
-  font-weight: 600;
-  letter-spacing: .2px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .pill::before {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 6px; height: 6px;
   border-radius: 50%;
   background: currentColor;
   flex: none;
 }
 
-.pill-idle   { color: var(--ink-faint); }
-.pill-sync   { color: #d9861f; }
+.pill-idle   { color: var(--fg-subtle); }
+.pill-sync   { color: var(--warn); }
 .pill-synced { color: var(--ok); }
 .pill-error  { color: var(--danger); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .pill-sync::before { animation: pulse 1.1s ease-in-out infinite; }
+  .pill-sync::before { animation: pulse 1.1s var(--ease-hover) infinite; }
 }
-@keyframes pulse { 50% { opacity: .25; } }
+@keyframes pulse { 50% { opacity: .3; } }
 
-/* ── layout ─────────────────────────────────────────────── */
+/* ── toolbar ────────────────────────────────────────────── */
 
-.wrap {
-  position: relative;
-  z-index: 1;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: clamp(20px, 4vw, 40px) clamp(14px, 4vw, 34px) 72px;
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s4);
 }
 
+.toolbar-count {
+  margin-right: auto;
+  font-size: .8rem;
+  color: var(--fg-subtle);
+}
+
+/* Segmented control -- view mode and sort order. */
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t-hover) var(--ease-hover),
+              color var(--t-hover) var(--ease-hover);
+}
+.segmented button:hover { color: var(--fg); }
+.segmented button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .07);
+}
+.segmented svg { width: 14px; height: 14px; }
+
+/* ── the wall ───────────────────────────────────────────── */
+
+/* Denser than a display grid: more tools reachable without scrolling, which
+   is the whole job. */
 .grid {
   display: grid;
-  gap: clamp(14px, 2.4vw, 22px);
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s3);
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
 }
 
-.empty {
-  margin: 40px 0;
-  padding: 34px 22px;
-  text-align: center;
-  color: var(--ink-soft);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
+.grid.view-list {
+  grid-template-columns: 1fr;
+  gap: var(--s2);
 }
-
-
-/* ── the card ───────────────────────────────────────────── */
 
 /* The slot is the grid item and the drag unit. It exists so the card's
    edit/delete/reorder buttons can be siblings of the anchor rather than
    children of it -- a button inside an <a> is invalid, and its click would
    bubble up and navigate away. */
-.card-slot {
-  position: relative;
-  display: block;
-}
+.card-slot { position: relative; display: block; }
 
 .card {
   position: relative;
   display: block;
   height: 100%;
-  padding: 20px 18px 18px;
-  min-height: 168px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  padding: var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: inherit;
   text-decoration: none;
-  isolation: isolate;
-  box-shadow: 0 2px 10px var(--shadow);
-  transform: translateZ(0);
-  transition: box-shadow .22s var(--ease), border-color .22s var(--ease),
-              transform .32s var(--spring);
-  will-change: transform;
+  transition: background var(--t-hover) var(--ease-hover),
+              border-color var(--t-hover) var(--ease-hover);
 }
 
-/* The accent wash. Sits under the content and above the surface, so the card
-   reads as a coloured object rather than a grey box with a coloured label. */
-.card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  border-radius: inherit;
-  opacity: .09;
-  background: linear-gradient(150deg, var(--a1), var(--a2));
-  transition: opacity .22s var(--ease);
-}
-
-/* The cursor-tracked glow. --mx/--my are written by script.js on pointermove
-   through CSSOM, which the strict style-src does not block. */
-.card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  opacity: 0;
-  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%),
-                              var(--glow), transparent 72%);
-  transition: opacity .28s var(--ease);
+/* Elevation from surface lightness rather than a stack of shadows: it reads
+   on both themes and costs no paint. */
+.card-slot:hover .card {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
 .card-icon {
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  margin-bottom: 14px;
-  border-radius: 15px;
-  font-size: 30px;
+  width: 38px;
+  height: 38px;
+  margin-bottom: var(--s3);
+  border-radius: var(--radius);
+  font-size: 20px;
   line-height: 1;
-  color: #fff;
-  background: linear-gradient(140deg, var(--a1), var(--a2));
-  box-shadow: 0 4px 14px var(--glow);
-  transform: translateZ(0);
-  transition: transform .3s var(--spring), box-shadow .22s var(--ease);
+  background: var(--tile, var(--surface-2));
+  color: var(--glyph, var(--fg));
 }
+.card-icon svg { width: 20px; height: 20px; display: block; }
 
-.card-icon svg { width: 30px; height: 30px; display: block; }
+.card-body { display: block; min-width: 0; }
 
 .card-name {
-  margin: 0 0 4px;
-  font-size: 1.09rem;
-  font-weight: 700;
+  display: block;
+  margin: 0 0 3px;
+  font-size: .95rem;
+  font-weight: 600;
   letter-spacing: -.01em;
+  color: var(--fg);
 }
 
 .card-desc {
   margin: 0;
-  font-size: .85rem;
+  /* -webkit-box is block-level, which is what makes the clamp work at all. */
+  font-size: .82rem;
   line-height: 1.45;
-  color: var(--ink-soft);
-  /* Two lines, then ellipsis — a long description must not make one card
+  color: var(--fg-muted);
+  /* Two lines, then ellipsis -- a long description must not make one card
      taller than its neighbours and tear a hole in the grid. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .card-host {
-  margin-top: 12px;
+  display: block;
+  margin: var(--s2) 0 0;
   font-size: .74rem;
-  color: var(--ink-faint);
-  letter-spacing: .3px;
-  word-break: break-all;
+  color: var(--fg-subtle);
+  /* overflow-wrap keeps a long host inside the card without break-all
+     shattering a readable name into fragments. */
+  overflow-wrap: anywhere;
 }
 
-/* The accent rule along the bottom edge, which fills on hover. */
-.card-rule {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 14px;
-  height: 3px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--a1), var(--a2));
-  transform: scaleX(.22);
-  transform-origin: left;
-  opacity: .55;
-  transition: transform .34s var(--ease), opacity .22s var(--ease);
+/* List view: the same card, laid out as a row. */
+.view-list .card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: 10px var(--s3);
+  border-radius: var(--radius);
 }
+.view-list .card-icon { width: 30px; height: 30px; margin: 0; font-size: 16px; border-radius: var(--radius-sm); }
+.view-list .card-icon svg { width: 16px; height: 16px; }
+.view-list .card-body { min-width: 0; }
+.view-list .card-name { margin: 0; }
+.view-list .card-desc {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: .78rem;
+}
+.view-list .card-host { margin: 0; text-align: right; white-space: nowrap; }
 
 /* ── card actions ───────────────────────────────────────── */
 
 .card-menu {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: var(--s2);
+  right: var(--s2);
   z-index: 3;
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
   opacity: 0;
-  transform: translateY(-4px);
-  transition: opacity .18s var(--ease), transform .18s var(--ease);
+  transition: opacity var(--t-hover) var(--ease-hover);
 }
 
-/* Keyboard users never hover, so focus inside the card reveals the same
-   controls a pointer would. Touch gets them permanently (see the media query
-   at the end of this file). */
+/* Keyboard users never hover, so focus inside the slot reveals the same
+   controls a pointer would. */
 .card-slot:hover .card-menu,
-.card-slot:focus-within .card-menu { opacity: 1; transform: none; }
+.card-slot:focus-within .card-menu { opacity: 1; }
+
+.view-list .card-menu {
+  top: 50%;
+  transform: translateY(-50%);
+}
 
 .icon-btn {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface-2);
-  color: var(--ink-soft);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
   cursor: pointer;
   font: inherit;
-  font-size: .8rem;
-  transition: transform .14s var(--ease), color .14s var(--ease),
-              border-color .14s var(--ease);
+  font-size: .78rem;
+  transition: background var(--t-hover) var(--ease-hover),
+              color var(--t-hover) var(--ease-hover);
 }
-.icon-btn:hover { color: var(--ink); border-color: var(--ink-faint); transform: scale(1.08); }
-.icon-btn:active { transform: scale(.92); }
-.icon-btn svg { width: 15px; height: 15px; }
-
-/* ── drag to reorder ────────────────────────────────────── */
-
-.card-slot.dragging {
-  opacity: .5;
-  cursor: grabbing;
-}
-
-.card-slot.dragging .card { border-color: var(--a1); }
+.icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+.icon-btn svg { width: 14px; height: 14px; }
 
 /* touch-action: none is what makes the pointer-drag work on a phone: without
    it the browser claims the gesture for scrolling and the drag never starts. */
 .drag-handle { cursor: grab; touch-action: none; }
 .drag-handle:active { cursor: grabbing; }
 
-/* ── pointer-only motion ────────────────────────────────── */
+.card-slot.dragging { opacity: .5; }
+.card-slot.dragging .card { border-color: var(--ring); }
 
-/* Everything expensive lives in here. A phone never parses a tilt it cannot
-   drive, and never pays for a will-change on a layer that will not move. */
-@media (hover: hover) and (pointer: fine) {
-  .card {
-    transform: perspective(760px)
-               rotateX(var(--rx, 0deg))
-               rotateY(var(--ry, 0deg))
-               translateZ(0);
-  }
+/* Reorder is manual-order only; in frecency order the wall sorts itself and
+   a drag handle would promise something it cannot keep. */
+.order-frecency .drag-handle { display: none; }
 
-  .card-slot:hover .card {
-    border-color: transparent;
-    box-shadow: 0 16px 38px var(--shadow-lift);
-    transition: box-shadow .22s var(--ease), border-color .22s var(--ease),
-                transform .09s linear;
-  }
-
-  .card-slot:hover .card::before { opacity: .17; }
-  .card-slot:hover .card::after  { opacity: 1; }
-  .card-slot:hover .card-rule { transform: scaleX(1); opacity: 1; }
-
-  .card-slot:hover .card-icon {
-    transform: scale(1.1) rotate(-7deg);
-    box-shadow: 0 10px 24px var(--glow);
-  }
+/* Touch has no hover to reveal the menu, so it stays visible -- but the whole
+   menu is one small cluster in the corner rather than three loose buttons. */
+@media (hover: none) {
+  .card-menu { opacity: 1; }
 }
 
-/* Touch: no tilt, no cursor glow — a press-scale that actually corresponds to
-   the gesture, and the action buttons always visible because there is no
-   hover state to reveal them. */
-@media not all and (hover: hover) {
-  .card:active { transform: scale(.975); }
-  .card-menu { opacity: 1; transform: none; }
+/* ── empty + no-results states ──────────────────────────── */
+
+.empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--s7) var(--s5);
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
-.card.launching { animation: launch .34s var(--ease); }
-@keyframes launch {
-  40%  { transform: scale(1.03) translateY(-5px); }
-  100% { transform: scale(1) translateY(0); }
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px; height: 44px;
+  margin: 0 auto var(--s3);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--fg-subtle);
 }
+.empty-icon svg { width: 22px; height: 22px; }
+
+.empty h2 { margin: 0 0 var(--s1); font-size: 1rem; font-weight: 600; }
+.empty p  { margin: 0 0 var(--s4); font-size: .875rem; color: var(--fg-muted); }
 
 /* ── dialogs ────────────────────────────────────────────── */
 
 .sheet {
-  width: min(520px, calc(100vw - 28px));
+  width: min(520px, calc(100vw - var(--s6)));
+  max-height: min(84vh, 700px);
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  color: var(--ink);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+  color: var(--fg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
+  overflow: hidden;
 }
 
-.sheet-narrow { width: min(400px, calc(100vw - 28px)); }
+.sheet-narrow { width: min(400px, calc(100vw - var(--s6))); }
 
-.sheet::backdrop { background: rgba(8, 6, 5, .62); }
+.sheet::backdrop { background: rgba(10, 8, 7, .5); }
 
-.sheet form { padding: 22px; }
+/* A form that scrolls between a pinned title and pinned actions, so Save is
+   never below the fold -- which is what happened on a phone in landscape,
+   where the icon and accent pickers pushed it off the bottom. */
+.sheet form {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  max-height: min(84vh, 700px);
+}
 
-.sheet h2 { margin: 0 0 14px; font-size: 1.16rem; }
+.sheet h2 {
+  margin: 0;
+  padding: var(--s4) var(--s5);
+  font-size: 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
 
-.muted { color: var(--ink-soft); font-size: .88rem; margin: 0 0 16px; }
+.sheet-body {
+  padding: var(--s5);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s5);
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.spacer { flex: 1; }
+
+.muted { color: var(--fg-muted); font-size: .875rem; margin: 0 0 var(--s4); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet[open] { animation: sheet-in var(--t-enter) var(--ease-out); }
+}
+/* Never scale(0) -- a panel that grows from nothing reads as a glitch. */
+@keyframes sheet-in {
+  from { opacity: 0; transform: scale(.97); }
+}
+
+/* ── form fields ────────────────────────────────────────── */
 
 .field {
   display: block;
-  margin: 0 0 15px;
+  margin: 0 0 var(--s4);
   padding: 0;
   border: 0;
 }
@@ -492,16 +735,14 @@ body {
 .field > span,
 .field > legend {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: var(--s2);
   padding: 0;
   font-size: .8rem;
-  font-weight: 700;
-  letter-spacing: .35px;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  font-weight: 600;
+  color: var(--fg-muted);
 }
 
-.field em { font-style: normal; font-weight: 500; text-transform: none; opacity: .8; }
+.field em { font-style: normal; font-weight: 400; color: var(--fg-subtle); }
 
 .field input[type="text"],
 .field input[type="url"],
@@ -509,166 +750,307 @@ body {
 .field input[type="password"] {
   width: 100%;
   min-height: var(--tap);
-  padding: 0 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--ground);
-  color: var(--ink);
+  padding: 0 var(--s3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  color: var(--fg);
   font: inherit;
   font-size: 1rem; /* 16px stops iOS Safari zooming the page on focus */
 }
 
-.field input:focus {
-  outline: none;
-  border-color: #ff8a3d;
-  box-shadow: 0 0 0 3px rgba(255, 138, 61, .22);
+.field input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  border-color: var(--ring);
 }
 
-.hint { display: block; margin-top: 5px; font-size: .76rem; color: var(--ink-faint); }
+.hint { display: block; margin-top: 5px; font-size: .78rem; color: var(--fg-subtle); }
 .hint code { font-size: .95em; }
 
 .error {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: rgba(200, 60, 40, .12);
+  margin: 0 0 var(--s3);
+  padding: 10px var(--s3);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
   color: var(--danger);
-  font-size: .86rem;
+  font-size: .85rem;
 }
-
-.sheet-actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }
-.spacer { flex: 1; }
 
 /* ── icon + accent pickers ──────────────────────────────── */
 
-.icon-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.icon-tabs {
+  display: inline-flex;
+  padding: 2px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
 
 .tab {
-  min-height: 34px;
-  padding: 0 13px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--ground);
-  color: var(--ink-soft);
+  min-height: 30px;
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
   font: inherit;
-  font-size: .84rem;
-  font-weight: 600;
+  font-size: .82rem;
+  font-weight: 500;
   cursor: pointer;
+  transition: background var(--t-hover) var(--ease-hover),
+              color var(--t-hover) var(--ease-hover);
 }
 .tab[aria-selected="true"] {
-  background: var(--surface-2);
-  border-color: var(--ink-faint);
-  color: var(--ink);
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .07);
 }
 
 .emoji-input {
   text-align: center;
-  font-size: 1.6rem !important;
-  letter-spacing: 2px;
+  font-size: 1.5rem !important;
 }
 
 .picks {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--s2);
   margin-top: 10px;
 }
 
 .pick {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--ground);
-  font-size: 21px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 19px;
   line-height: 1;
   cursor: pointer;
-  transition: transform .14s var(--spring), border-color .14s var(--ease);
+  transition: background var(--t-hover) var(--ease-hover),
+              border-color var(--t-hover) var(--ease-hover);
 }
-.pick:hover { transform: scale(1.14); border-color: var(--ink-faint); }
-.pick[aria-pressed="true"] { border-color: #ff8a3d; box-shadow: 0 0 0 2px rgba(255,138,61,.25); }
-.pick svg { width: 22px; height: 22px; color: var(--ink); }
+.pick:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.pick[aria-pressed="true"] {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+.pick svg { width: 20px; height: 20px; }
 
-.accents { display: flex; flex-wrap: wrap; gap: 8px; }
+.accents { display: flex; flex-wrap: wrap; gap: var(--s2); }
 
+/* The swatch previews exactly what the card will show: the tile with its
+   glyph colour, not a decorative gradient the card never renders. */
 .swatch {
   width: 40px;
   height: 40px;
+  display: grid;
+  place-items: center;
   padding: 0;
-  border: 2px solid transparent;
-  border-radius: 50%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--tile);
+  color: var(--glyph);
   cursor: pointer;
-  background: linear-gradient(140deg, var(--a1), var(--a2));
-  transition: transform .16s var(--spring);
+  transition: border-color var(--t-hover) var(--ease-hover);
 }
-.swatch:hover { transform: scale(1.14); }
+.swatch::after {
+  content: "";
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .swatch[aria-pressed="true"] {
-  border-color: var(--ink);
-  transform: scale(1.1);
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
 }
+
+/* ── command palette ────────────────────────────────────── */
+
+/* The fastest path to a tool, and the reason the wall can afford to be calm.
+   Opening is keyboard-initiated and happens many times a day, so it is not
+   animated: a spring here would be felt as lag, not polish. */
+.palette {
+  width: min(560px, calc(100vw - var(--s4)));
+  max-height: min(70vh, 520px);
+  margin-top: 12vh;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .26);
+  overflow: hidden;
+}
+
+.palette::backdrop { background: rgba(10, 8, 7, .45); }
+
+.palette-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 0 var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+.palette-head svg { width: 17px; height: 17px; color: var(--fg-subtle); flex: none; }
+
+#paletteInput {
+  flex: 1;
+  min-width: 0;
+  height: 50px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 1rem;
+}
+#paletteInput:focus { outline: none; }
+#paletteInput::placeholder { color: var(--fg-subtle); }
+
+.palette-list {
+  margin: 0;
+  padding: var(--s2);
+  list-style: none;
+  overflow-y: auto;
+  max-height: min(70vh - 50px, 470px);
+  -webkit-overflow-scrolling: touch;
+}
+
+.palette-group {
+  padding: var(--s2) 10px 4px;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  scroll-margin: var(--s2);
+}
+
+/* Selection is driven by aria-selected from the keyboard, so the highlight
+   and the screen-reader state can never disagree. */
+.palette-item[aria-selected="true"] { background: var(--surface-2); }
+
+.palette-item .card-icon { width: 28px; height: 28px; margin: 0; font-size: 15px; border-radius: var(--radius-sm); flex: none; }
+.palette-item .card-icon svg { width: 15px; height: 15px; }
+
+.palette-text { flex: 1; min-width: 0; }
+.palette-name { font-size: .9rem; font-weight: 500; }
+.palette-sub {
+  font-size: .78rem;
+  color: var(--fg-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-action-icon {
+  display: grid;
+  place-items: center;
+  width: 28px; height: 28px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+}
+.palette-action-icon svg { width: 15px; height: 15px; }
+
+.palette-empty { padding: var(--s5); text-align: center; color: var(--fg-subtle); font-size: .875rem; }
+
+.palette-foot {
+  display: flex;
+  gap: var(--s4);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: .74rem;
+  color: var(--fg-subtle);
+}
+.palette-foot span { display: inline-flex; align-items: center; gap: 5px; }
 
 /* ── toast ──────────────────────────────────────────────── */
 
+/* The live region stays in the DOM and only its text changes. Toggling
+   `hidden` meant the text was already present when the region entered the
+   accessibility tree, so screen readers announced nothing. */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 22px;
+  bottom: max(20px, env(safe-area-inset-bottom));
   z-index: 60;
   transform: translateX(-50%);
-  max-width: min(440px, calc(100vw - 28px));
-  padding: 12px 18px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
+  max-width: min(440px, calc(100vw - var(--s6)));
+  padding: 10px var(--s4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--ink);
-  font-size: .88rem;
-  box-shadow: 0 10px 30px var(--shadow-lift);
+  color: var(--fg);
+  font-size: .875rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--t-enter) var(--ease-out),
+              visibility 0s linear var(--t-enter);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .toast { animation: rise .26s var(--ease); }
-}
-@keyframes rise {
-  from { opacity: 0; transform: translate(-50%, 10px); }
+.toast.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--t-enter) var(--ease-out), visibility 0s;
 }
 
 /* ── reduced motion ─────────────────────────────────────── */
 
-/* The tilt, the glow sweep, the icon wiggle and the launch bounce are all
-     decoration. Someone who has asked the OS for less motion gets the same
-     information with colour and opacity alone. */
+/* Reduced motion means gentler, not absent: transforms and the pulse go,
+   while the opacity and colour changes that tell you something happened
+   stay. Blanket-killing every transition removes information. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .001ms !important;
-    scroll-behavior: auto !important;
-  }
-
-  .card,
-  .card-slot:hover .card { transform: none !important; }
-  .card-icon,
-  .card-slot:hover .card-icon { transform: none !important; }
-  .card-rule { transform: scaleX(1); }
-  .card.launching { animation: none !important; }
+  .btn:active { transform: none; }
+  .sheet[open] { animation: none; }
+  .pill-sync::before { animation: none; }
+  * { scroll-behavior: auto !important; }
 }
 
 /* ── small screens ──────────────────────────────────────── */
 
+@media (max-width: 720px) {
+  .search-trigger { width: auto; flex: 1; }
+  .search-trigger .search-label,
+  .search-trigger kbd { display: none; }
+  .search-trigger { justify-content: center; padding: 0; width: 36px; flex: none; }
+}
+
 @media (max-width: 560px) {
-  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .card { min-height: 150px; padding: 16px 14px 14px; }
-  .card-icon { width: 46px; height: 46px; font-size: 25px; margin-bottom: 11px; }
-  .card-icon svg { width: 25px; height: 25px; }
-  .card-name { font-size: .98rem; }
-  .card-desc { -webkit-line-clamp: 2; font-size: .8rem; }
-  .card-host { display: none; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .card { padding: var(--s3); }
+  .card-icon { width: 34px; height: 34px; font-size: 18px; margin-bottom: 10px; }
+  .card-icon svg { width: 18px; height: 18px; }
+  .card-name { font-size: .9rem; }
+  .card-desc { font-size: .78rem; }
+  /* The host is a launcher's one piece of provenance -- where does this
+     actually go? It stays on a phone; only the brand wordmark gives way. */
+  .card-host { font-size: .7rem; }
   .brand-text { display: none; }
-  .topbar { gap: 8px; }
-  .btn { padding: 0 12px; font-size: .86rem; }
+  .toolbar-count { display: none; }
+  .palette { margin-top: 0; max-height: 100vh; border-radius: 0; width: 100vw; }
+  .sheet, .sheet-narrow { width: calc(100vw - var(--s4)); }
+}
+
+@media (max-width: 380px) {
+  .grid { grid-template-columns: 1fr; }
+  .view-list .card-host { display: none; }
 }

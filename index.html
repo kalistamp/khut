@@ -1,23 +1,30 @@
 <!DOCTYPE html>
-<html lang="en" class="theme-dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="light dark">
 <meta name="description" content="Kalistamp Hut — the launcher for the workshop.">
 <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'self'; connect-src 'self' https://baiojghilzxhkebfblzv.supabase.co wss://baiojghilzxhkebfblzv.supabase.co; form-action 'self'; frame-ancestors 'none'; frame-src 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'sha384-+p7wS57BHVK2d7IkKemxW2DBsEJqFQwO6ABVt7xBcg7BPbN5q9/D6Mt/UVrbXeDR' https://cdn.jsdelivr.net; style-src 'self'; upgrade-insecure-requests">
+      content="default-src 'self'; base-uri 'self'; connect-src 'self' https://baiojghilzxhkebfblzv.supabase.co wss://baiojghilzxhkebfblzv.supabase.co; form-action 'self'; frame-ancestors 'none'; frame-src 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'sha384-CPHYu6XYyDiXZUTsuAOX8S4KnBPCcAmDkxIG1XfqBn3dvxVhdB0gl/RI5BdT6h6F' https://cdn.jsdelivr.net; style-src 'self'; upgrade-insecure-requests">
 <title>Kalistamp Hut</title>
 <!-- ?v= is a cache buster: bump it whenever style.css or the scripts change so
      returning visitors never run a stale stylesheet against new markup. -->
-<link rel="stylesheet" href="./style.css?v=1">
-<!-- Hashed by the CSP; runs before CSS paints to avoid a light-mode flash. -->
-<script>(function(){try{var s=localStorage.getItem('hut.theme');if(s==='light')document.documentElement.classList.remove('theme-dark');}catch(e){}})();</script>
+<link rel="stylesheet" href="./style.css?v=2">
+<!-- Hashed by the CSP; runs before CSS paints so an explicit theme choice
+     never flashes the other one. Absent or 'system' means follow the OS,
+     which the stylesheet does on its own -- so this only has to write the
+     attribute when the user has actually chosen. -->
+<script>(function(){try{var t=localStorage.getItem('hut.theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 </head>
 <body>
 
-<!-- Built-in glyph set. Drawn in currentColor so each card's accent colours its
-     own icon; referenced by <use href="#hut-<name>"> from script.js. -->
+<!-- Built-in glyph set.
+
+     hut-* are the tool glyphs offered in the icon picker: their names are
+     stored in the database, so this list may grow but must never lose one.
+     hut-ui-* are chrome, kept out of the picker by the prefix. All are drawn
+     in currentColor so the accent colours its own icon. -->
 <svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0">
   <defs>
     <symbol id="hut-rocket" viewBox="0 0 24 24">
@@ -77,89 +84,203 @@
       <path d="M12 20.5S3.5 15.4 3.5 9.6A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8.5 2.6c0 5.8-8.5 10.9-8.5 10.9Z" fill="currentColor" opacity=".22"/>
       <path d="M12 20.5S3.5 15.4 3.5 9.6A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8.5 2.6c0 5.8-8.5 10.9-8.5 10.9Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
     </symbol>
+
+    <!-- chrome -->
+    <symbol id="hut-ui-search" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="m15.5 15.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="hut-ui-grid" viewBox="0 0 24 24">
+      <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="hut-ui-list" viewBox="0 0 24 24">
+      <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="hut-ui-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="hut-ui-hand" viewBox="0 0 24 24">
+      <path d="M8 6.5v-1a1.5 1.5 0 0 1 3 0v5.5m0-5a1.5 1.5 0 0 1 3 0V12m0-4.5a1.5 1.5 0 0 1 3 0V15a5.5 5.5 0 0 1-5.5 5.5h-1A5.5 5.5 0 0 1 5 15v-3a1.5 1.5 0 0 1 3 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="hut-ui-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="hut-ui-grip" viewBox="0 0 24 24">
+      <circle cx="9" cy="6" r="1.6" fill="currentColor"/><circle cx="15" cy="6" r="1.6" fill="currentColor"/>
+      <circle cx="9" cy="12" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/>
+      <circle cx="9" cy="18" r="1.6" fill="currentColor"/><circle cx="15" cy="18" r="1.6" fill="currentColor"/>
+    </symbol>
+    <symbol id="hut-ui-pencil" viewBox="0 0 24 24">
+      <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M14.5 5.5 18.5 9.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    </symbol>
+    <symbol id="hut-ui-trash" viewBox="0 0 24 24">
+      <path d="M5 7h14M10 7V5h4v2M6.5 7l.8 12.5h9.4L17.5 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="hut-ui-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4.2" fill="currentColor"/>
+      <path d="M12 2.2v2.4M12 19.4v2.4M21.8 12h-2.4M4.6 12H2.2M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7M18.9 18.9l-1.7-1.7M6.8 6.8 5.1 5.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="hut-ui-moon" viewBox="0 0 24 24">
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="hut-ui-system" viewBox="0 0 24 24">
+      <rect x="3" y="4.5" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M8.5 20h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="hut-ui-out" viewBox="0 0 24 24">
+      <path d="M14 4h6v6M20 4l-8.5 8.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M18 14v5a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V7.5A1.5 1.5 0 0 1 5 6h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="hut-ui-user" viewBox="0 0 24 24">
+      <circle cx="12" cy="8.5" r="3.8" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M4.8 20a7.4 7.4 0 0 1 14.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
   </defs>
 </svg>
 
-<div class="lantern" aria-hidden="true"></div>
-
 <header class="topbar">
-  <div class="brand">
+  <h1 class="brand">
     <span class="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="26" height="26" focusable="false">
-        <path d="M16 3 3 13v16h10v-9h6v9h10V13L16 3Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
-        <circle cx="16" cy="11.5" r="2.2" fill="currentColor"/>
+      <svg viewBox="0 0 32 32" width="18" height="18" focusable="false">
+        <path d="M16 4 4 13.5V28h9v-8h6v8h9V13.5L16 4Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
       </svg>
     </span>
-    <span class="brand-text">
-      <b>Kalistamp</b> Hut
-    </span>
-  </div>
+    <span class="brand-text"><b>Kalistamp</b> <span>Hut</span></span>
+  </h1>
 
   <div class="topbar-actions">
+    <button id="searchBtn" class="search-trigger" type="button" aria-label="Search tools">
+      <svg aria-hidden="true" focusable="false"><use href="#hut-ui-search"/></svg>
+      <span class="search-label">Search tools…</span>
+      <kbd id="searchKbd">Ctrl K</kbd>
+    </button>
+
     <span id="syncPill" class="pill pill-idle" role="status" aria-live="polite">Local</span>
+
     <button id="addBtn" class="btn btn-primary" type="button">
-      <span aria-hidden="true">+</span> Add tool
+      <svg aria-hidden="true" focusable="false"><use href="#hut-ui-plus"/></svg>
+      <span class="add-label">Add tool</span>
     </button>
-    <button id="themeBtn" class="btn btn-icon" type="button" aria-label="Switch to light mode" title="Theme">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-        <circle cx="12" cy="12" r="4.4" fill="currentColor"/>
-        <path d="M12 1.8v2.6M12 19.6v2.6M22.2 12h-2.6M4.4 12H1.8M19.2 4.8l-1.9 1.9M6.7 17.3l-1.9 1.9M19.2 19.2l-1.9-1.9M6.7 6.7 4.8 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-      </svg>
+
+    <button id="themeBtn" class="btn btn-icon" type="button" aria-label="Theme: follow system">
+      <svg aria-hidden="true" focusable="false"><use id="themeIcon" href="#hut-ui-system"/></svg>
     </button>
-    <button id="authBtn" class="btn" type="button">Sign in</button>
+
+    <button id="authBtn" class="btn btn-icon" type="button" aria-label="Sign in">
+      <svg aria-hidden="true" focusable="false"><use href="#hut-ui-user"/></svg>
+    </button>
   </div>
 </header>
 
 <main class="wrap">
-  <p id="emptyState" class="empty" hidden>
-    No tools yet. Hit <b>Add tool</b> to hang the first one on the wall.
-  </p>
+  <div class="toolbar">
+    <span id="toolCount" class="toolbar-count"></span>
+
+    <div class="segmented" role="group" aria-label="Sort order">
+      <button id="orderManual" type="button" aria-pressed="true">
+        <svg aria-hidden="true" focusable="false"><use href="#hut-ui-hand"/></svg>
+        Manual
+      </button>
+      <button id="orderFrecency" type="button" aria-pressed="false">
+        <svg aria-hidden="true" focusable="false"><use href="#hut-ui-clock"/></svg>
+        Most used
+      </button>
+    </div>
+
+    <div class="segmented" role="group" aria-label="View">
+      <button id="viewGrid" type="button" aria-pressed="true" aria-label="Grid view">
+        <svg aria-hidden="true" focusable="false"><use href="#hut-ui-grid"/></svg>
+      </button>
+      <button id="viewList" type="button" aria-pressed="false" aria-label="List view">
+        <svg aria-hidden="true" focusable="false"><use href="#hut-ui-list"/></svg>
+      </button>
+    </div>
+  </div>
+
   <div id="grid" class="grid"></div>
+
+  <div id="emptyState" class="empty" hidden>
+    <span class="empty-icon" aria-hidden="true">
+      <svg><use href="#hut-ui-grid"/></svg>
+    </span>
+    <h2>Nothing on the wall yet</h2>
+    <p>Hang your first tool here and it will be one keystroke away.</p>
+    <button type="button" id="emptyAdd" class="btn btn-primary">
+      <svg aria-hidden="true" focusable="false"><use href="#hut-ui-plus"/></svg>
+      Add your first tool
+    </button>
+  </div>
 </main>
 
+<!-- ── Command palette ─────────────────────────────────────
+     The fastest path to a tool: type two letters, press Enter. Opening is
+     deliberately un-animated -- this is a keyboard action repeated many times
+     a day, and any transition on it is felt as lag rather than polish. -->
+<dialog id="paletteDialog" class="palette" aria-label="Search tools and actions">
+  <div class="palette-head">
+    <svg aria-hidden="true" focusable="false"><use href="#hut-ui-search"/></svg>
+    <input id="paletteInput" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Search tools and actions…"
+           role="combobox" aria-expanded="true" aria-controls="paletteList"
+           aria-autocomplete="list">
+  </div>
+  <ul id="paletteList" class="palette-list" role="listbox" aria-label="Results"></ul>
+  <div class="palette-foot">
+    <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+    <span><kbd>↵</kbd> open</span>
+    <span><kbd>Esc</kbd> close</span>
+  </div>
+</dialog>
+
 <!-- ── Tool editor ─────────────────────────────────────────── -->
-<dialog id="toolDialog" class="sheet">
+<dialog id="toolDialog" class="sheet" aria-labelledby="toolDialogTitle">
   <form id="toolForm" method="dialog">
     <h2 id="toolDialogTitle">Add tool</h2>
 
-    <label class="field">
-      <span>Name</span>
-      <input id="fName" type="text" maxlength="200" required autocomplete="off" placeholder="Docket">
-    </label>
+    <div class="sheet-body">
+      <label class="field">
+        <span>Name</span>
+        <input id="fName" type="text" maxlength="200" required autocomplete="off" placeholder="Docket">
+      </label>
 
-    <label class="field">
-      <span>URL</span>
-      <input id="fUrl" type="url" maxlength="2000" required autocomplete="off"
-             inputmode="url" placeholder="https://kalistamp.github.io/doc/">
-      <small class="hint">Must start with <code>https://</code>.</small>
-    </label>
+      <label class="field">
+        <span>URL</span>
+        <input id="fUrl" type="url" maxlength="2000" required autocomplete="off"
+               inputmode="url" placeholder="https://kalistamp.github.io/doc/">
+        <small class="hint">Must start with <code>https://</code>.</small>
+      </label>
 
-    <label class="field">
-      <span>Description <em>optional</em></span>
-      <input id="fDescription" type="text" maxlength="1000" autocomplete="off" placeholder="Notes, files and sharing">
-    </label>
+      <label class="field">
+        <span>Description <em>optional</em></span>
+        <input id="fDescription" type="text" maxlength="1000" autocomplete="off" placeholder="Notes, files and sharing">
+      </label>
 
-    <fieldset class="field">
-      <legend>Icon</legend>
-      <div class="icon-tabs" role="tablist">
-        <button type="button" class="tab" id="tabEmoji" role="tab" aria-selected="true">Emoji</button>
-        <button type="button" class="tab" id="tabSvg" role="tab" aria-selected="false">Glyph</button>
-      </div>
-      <div id="emojiPane" class="pane">
-        <input id="fEmoji" type="text" maxlength="40" autocomplete="off" class="emoji-input" placeholder="🗂️">
-        <div id="emojiPicks" class="picks"></div>
-      </div>
-      <div id="svgPane" class="pane" hidden>
-        <div id="svgPicks" class="picks picks-svg"></div>
-      </div>
-    </fieldset>
+      <fieldset class="field">
+        <legend>Icon</legend>
+        <div class="icon-tabs" role="tablist" aria-label="Icon type">
+          <button type="button" class="tab" id="tabEmoji" role="tab"
+                  aria-selected="true" aria-controls="emojiPane" tabindex="0">Emoji</button>
+          <button type="button" class="tab" id="tabSvg" role="tab"
+                  aria-selected="false" aria-controls="svgPane" tabindex="-1">Glyph</button>
+        </div>
+        <div id="emojiPane" class="pane" role="tabpanel" aria-labelledby="tabEmoji" tabindex="0">
+          <input id="fEmoji" type="text" maxlength="40" autocomplete="off" class="emoji-input" placeholder="🗂️" aria-label="Type any emoji">
+          <div id="emojiPicks" class="picks"></div>
+        </div>
+        <div id="svgPane" class="pane" role="tabpanel" aria-labelledby="tabSvg" tabindex="0" hidden>
+          <div id="svgPicks" class="picks picks-svg"></div>
+        </div>
+      </fieldset>
 
-    <fieldset class="field">
-      <legend>Accent</legend>
-      <div id="accentPicks" class="accents"></div>
-    </fieldset>
+      <fieldset class="field">
+        <legend>Accent</legend>
+        <div id="accentPicks" class="accents"></div>
+      </fieldset>
 
-    <p id="toolError" class="error" hidden></p>
+      <p id="toolError" class="error" hidden></p>
+    </div>
 
     <div class="sheet-actions">
       <button type="button" id="toolDelete" class="btn btn-danger" hidden>Delete</button>
@@ -171,25 +292,28 @@
 </dialog>
 
 <!-- ── Sign in ─────────────────────────────────────────────── -->
-<dialog id="authDialog" class="sheet">
+<dialog id="authDialog" class="sheet" aria-labelledby="authDialogTitle">
   <form id="authForm" method="dialog">
-    <h2>Sign in to manage your Hut</h2>
-    <p class="muted">
-      Launching a tool never needs this. Sign in to add, edit, delete or
-      reorder cards — and to keep the same wall on your other devices.
-    </p>
+    <h2 id="authDialogTitle">Sign in to manage your Hut</h2>
 
-    <label class="field">
-      <span>Email</span>
-      <input id="fEmail" type="email" required autocomplete="username" inputmode="email">
-    </label>
+    <div class="sheet-body">
+      <p class="muted">
+        Launching a tool never needs this. Sign in to add, edit, delete or
+        reorder cards — and to keep the same wall on your other devices.
+      </p>
 
-    <label class="field">
-      <span>Password</span>
-      <input id="fPassword" type="password" required autocomplete="current-password">
-    </label>
+      <label class="field">
+        <span>Email</span>
+        <input id="fEmail" type="email" required autocomplete="username" inputmode="email">
+      </label>
 
-    <p id="authError" class="error" hidden></p>
+      <label class="field">
+        <span>Password</span>
+        <input id="fPassword" type="password" required autocomplete="current-password">
+      </label>
+
+      <p id="authError" class="error" hidden></p>
+    </div>
 
     <div class="sheet-actions">
       <span class="spacer"></span>
@@ -200,10 +324,12 @@
 </dialog>
 
 <!-- ── Confirm delete ──────────────────────────────────────── -->
-<dialog id="confirmDialog" class="sheet sheet-narrow">
+<dialog id="confirmDialog" class="sheet sheet-narrow" aria-labelledby="confirmTitle">
   <form method="dialog">
-    <h2>Delete tool?</h2>
-    <p class="muted" id="confirmText">This removes the card. The tool itself is untouched.</p>
+    <h2 id="confirmTitle">Delete tool?</h2>
+    <div class="sheet-body">
+      <p class="muted" id="confirmText">This removes the card. The tool itself is untouched.</p>
+    </div>
     <div class="sheet-actions">
       <span class="spacer"></span>
       <button type="button" id="confirmCancel" class="btn">Cancel</button>
@@ -212,13 +338,15 @@
   </form>
 </dialog>
 
-<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<!-- Always in the DOM so the live region is established before any text
+     lands in it; visibility is a class, never the hidden attribute. -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0/dist/umd/supabase.min.js"
         integrity="sha384-fPWur1rx/DE6YtXP/x0MD6dd90RgnVsz5yX/DIg7CcVAnTBZsENWuIcpvVTM39ti"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="./supabase-config.js?v=1"></script>
-<script src="./supabase.js?v=1"></script>
-<script src="./script.js?v=1"></script>
+<script src="./supabase-config.js?v=2"></script>
+<script src="./supabase.js?v=2"></script>
+<script src="./script.js?v=2"></script>
 </body>
 </html>
