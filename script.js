@@ -5,15 +5,22 @@
    calls in. Nothing here builds a Supabase client or knows a table name.
 
    STORAGE MODEL
-     Hut NEVER requires a sign-in. It is a home base: you sign in to the tools
-     it launches, if those tools want it, not to the launcher. Adding, editing,
-     deleting and reordering all work signed out and persist in localStorage.
+     VIEWING and LAUNCHING never require a sign-in -- that is the point of a
+     home base, and each tool asks for its own login if it wants one.
+     MANAGING the wall does: add, edit, delete and reorder all sit behind the
+     sign-in, so someone who finds the URL is shown a launcher, not an editor.
 
-     Signing in is opt-in cloud sync and nothing else. It carries the same wall
-     to your other devices, using hut.tools in Supabase, per account. That is
-     also why the six starter tools are the DEFAULT_TOOLS constant below rather
-     than rows inserted by a migration: the page has to work with no account,
-     no network and no database.
+     To be precise about what that gate is and is not: an anonymous visitor
+     could never have reached your data anyway. hut.tools is behind RLS, every
+     policy tests auth.uid() = user_id, and `anon` is revoked from the schema
+     itself. The gate removes a MISLEADING AFFORDANCE -- edit controls that
+     imply the page is world-editable -- rather than closing a hole.
+
+     The record is hut.tools in Supabase, per account. localStorage is the
+     first-paint cache and the signed-out view, not the record. That is why the
+     six starter tools are the DEFAULT_TOOLS constant below rather than rows
+     inserted by a migration: the page has to paint before the database
+     answers, and before there is an account at all.
    ============================================================ */
 
 (function () {
@@ -210,7 +217,7 @@
     card.appendChild(rule);
 
     slot.appendChild(card);
-    slot.appendChild(buildMenu(tool));
+    if (state.signedIn) slot.appendChild(buildMenu(tool));
 
     bindCard(card, tool);
     return slot;
@@ -315,6 +322,7 @@
 
     // Keyboard reordering, so the drag handle is not the only way.
     card.addEventListener('keydown', (event) => {
+      if (!state.signedIn) return;
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       if (!event.altKey) return;
       event.preventDefault();
@@ -330,6 +338,7 @@
 
   function bindDrag(handle) {
     handle.addEventListener('pointerdown', (event) => {
+      if (!state.signedIn) return;
       event.preventDefault();
       event.stopPropagation();
 
@@ -470,6 +479,10 @@
   }
 
   function openToolDialog(id) {
+    // Managing the wall requires an account. Offer the way in rather than a
+    // dead button: a visitor who taps "Add tool" gets the sign-in sheet.
+    if (!state.signedIn) { openAuthDialog(); return; }
+
     state.editingId = id == null ? null : id;
     const tool = id == null ? null : state.tools.find(t => t.id === id);
 
@@ -594,10 +607,11 @@
     }
   }
 
-  /* Signing in MERGES; it never overwrites. Because the wall is fully editable
-     signed out, by the time an account is attached this device may already
-     hold cards and edits that exist nowhere else, and a plain overwrite would
-     throw them away. Three rules, all consistent with the per-row
+  /* Signing in MERGES; it never overwrites. Editing is behind the sign-in, so
+     this device cannot be carrying anonymous edits -- but it can be carrying
+     edits made while signed in and offline, or before a session expired, still
+     sitting unpushed in state.dirty / state.removed. A plain overwrite would
+     throw those away. Three rules, all consistent with the per-row
      last-writer-wins model:
 
        · a card only this device has  -> kept, and pushed up
@@ -686,7 +700,7 @@
     // than as a line of prose under the cards.
     el.authBtn.title = state.signedIn
       ? 'Signed in as ' + state.email
-      : 'Optional — sync your cards across devices';
+      : 'Sign in to manage and sync your cards';
     if (!state.signedIn) setPill('idle', 'Local');
     render();
   }
@@ -769,6 +783,7 @@
       // is unreachable: the workflow fails if the placeholders survive.
       setPill('idle', 'Local only');
       el.authBtn.hidden = true;
+      el.addBtn.hidden = true;
       return;
     }
 

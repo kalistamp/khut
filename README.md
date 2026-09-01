@@ -30,26 +30,32 @@ person, so this uses the plain upsert model from the `lists` schema.
 cache and the signed-out view — not the record. Signing in pulls from the
 database over the top of it.
 
-### Hut never requires a sign-in
+### Launching is open; managing is not
 
-It is a home base. You sign in to the tools it launches, if those tools ask for
-it — not to the launcher. Adding, editing, deleting and reordering all work
-signed out, with no account and no network, and persist in `localStorage`.
+Viewing the wall and clicking through to a tool never require a sign-in — that
+is the point of a home base, and each tool asks for its own login if it wants
+one. Add, edit, delete and reorder all sit behind the sign-in, so someone who
+finds the URL is shown a launcher, not an editor.
 
-That is why the six starter tools are a `DEFAULT_TOOLS` constant in `script.js`
-rather than rows inserted by a migration: the page has to work before there is
-an account, a database, or a connection. Their ids come from a fixed base
-rather than `Date.now()`, so two devices seeding independently produce the same
-six ids instead of twelve cards.
+Be precise about what that gate does. An anonymous visitor could never reach
+your data in the first place: `hut.tools` is behind RLS, the policy tests
+`auth.uid() = user_id`, and `anon` is revoked from the schema itself, so an
+unauthenticated caller cannot even resolve the table name. Anonymous edits, back
+when they were allowed, only ever wrote to that visitor's own `localStorage` and
+never left their browser. The gate removes a **misleading affordance** — edit
+controls implying the page is world-editable — rather than closing a hole.
 
-Signing in is opt-in cloud sync and nothing else — it carries the same wall to
-your other devices.
+The six starter tools are a `DEFAULT_TOOLS` constant in `script.js` rather than
+rows inserted by a migration, so the page paints before the database answers and
+before an account exists. Their ids come from a fixed base rather than
+`Date.now()`, so two devices seeding independently produce the same six ids
+instead of twelve cards.
 
 ### What signing in merges
 
-Because the wall is fully editable signed out, a device may already hold cards
-that exist nowhere else by the time an account is attached. Signing in
-therefore **merges** rather than overwrites:
+A device can be carrying edits made while signed in and offline, or before a
+session expired, still unpushed. Signing in therefore **merges** rather than
+overwrites:
 
 | Case | Winner |
 |---|---|
@@ -59,8 +65,8 @@ therefore **merges** rather than overwrites:
 | Anything else | the cloud row |
 
 All four are consistent with the per-row last-writer-wins model below. A plain
-overwrite would have silently thrown away offline work, which is the one
-outcome a launcher must not produce.
+overwrite would silently throw away offline work, which is the one outcome a
+launcher must not produce.
 
 ### Conflict model
 
@@ -74,8 +80,10 @@ Database migrations, configuration, and cleanup SQL live outside this static
 repository under
 `/home/ks/Documents/projects_audit/prelaunch_deployment/shared_supabase`.
 
-1. **Create the schema.** From the external operations directory, link the
-   production project and apply `20260831210000_hut_schema.sql`:
+1. **Create the schema.** Either paste
+   `supabase/sql_editor/hut_schema.sql` from the external operations directory
+   into the Supabase SQL editor and run it — it carries verification queries
+   and is safe to run more than once — or apply the identical CLI migration:
 
    ```bash
    cd /home/ks/Documents/projects_audit/prelaunch_deployment/shared_supabase
@@ -84,26 +92,34 @@ repository under
    npx --yes supabase@latest db push
    ```
 
-   The migration is additive. It creates the `hut` schema and one table and
-   touches nothing that belongs to another application.
+   Both are additive and carry the same DDL: they create the `hut` schema and
+   one table, and touch nothing belonging to another application.
 
 2. **Expose the schema.** Open the project's Data API settings, find **Exposed
    schemas**, add `hut` **without removing existing schemas**, and save. The
    local `config.toml` already lists it, so `config push` does the same job if
    you would rather push than click.
 
-3. **Auth needs no change.** Hut is another schema in the same project, signed
-   into with the same account as Docket, Lists, Daily and Prompts. Signup stays
-   disabled; there is intentionally no sign-up flow.
+3. **Create the login.** Signup is disabled project-wide on purpose, so open
+   Authentication → Users → Add user → Create new user and tick **Auto Confirm
+   User**. Hut is another schema in the same project, so the account you
+   already use signs in here too — there is intentionally no sign-up flow.
+   This is what unlocks add, edit, delete and reorder.
 
-4. **Configure GitHub Actions.** In GitHub, open Settings → Secrets and
-   variables → Actions → Repository secrets and add:
+4. **Configure GitHub Actions.** Open Settings → Secrets and variables →
+   Actions → Repository secrets and add both:
 
    - `SUPABASE_URL`: the shared project's URL.
    - `SUPABASE_PUBLISHABLE_KEY`: the shared project's `sb_publishable_...` key.
 
-   Never substitute the service-role key. The workflow does not read it, and
-   fails the build if anything resembling one reaches the artifact.
+   These are what connect the deployed site to the database. Without them the
+   site still deploys and still launches every tool, but the wall is read-only:
+   there is no account to sign in to, so nothing can be added or changed.
+
+   Set both or neither — the workflow fails the build on a partial pair, since
+   that can only be a mistake. Never substitute the service-role key; the
+   workflow does not read it, and fails the build if anything resembling one
+   reaches the artifact.
 
 5. **Configure Pages.** Open Settings → Pages and choose **GitHub Actions** as
    the source. The deployment workflow injects the two public values into the
