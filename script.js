@@ -1000,9 +1000,26 @@
       else setPill('synced', 'Synced');
     } catch (error) {
       // The wall is already on screen from the cache, so a failed pull costs
-      // nothing but the sync. Say so and carry on.
-      setPill('error', 'Offline');
-      toast('Could not reach the cloud — your cards are still saved on this device.');
+      // nothing but the sync. But say WHY it failed: a schema that is not
+      // exposed in the Data API and a phone with no signal are different
+      // problems, and reporting both as "Offline" sends you hunting the wrong
+      // one. PostgREST codes mean the request arrived and was refused --
+      // PGRST106 is an unexposed schema, PGRST301/42501 are auth or RLS.
+      //
+      // Echoing the message is not a disclosure here: the schema name is
+      // already public in supabase-config.js, sign-up is disabled project-wide,
+      // and the only person who can reach this state is the account owner.
+      const code = (error && error.code) || '';
+      const detail = (error && error.message) || '';
+      const refused = /^PGRST/.test(code) || code === '42501';
+
+      setPill('error', refused ? 'Sync error' : 'Offline');
+      el.pill.title = detail || 'The cloud could not be reached.';
+      // The detail comes from PostgREST and may or may not end in punctuation.
+      const sentence = /[.!?]$/.test(detail) ? detail : detail + '.';
+      toast(refused
+        ? 'Cloud sync failed — ' + sentence + ' Your cards are still saved on this device.'
+        : 'Could not reach the cloud — your cards are still saved on this device.');
     }
   }
 
