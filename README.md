@@ -34,26 +34,26 @@ It also holds what is deliberately *not* a record: `hut.usage` (launch counts),
 `hut.view`, `hut.order` and `hut.theme`. Those are per-device preferences, so
 they never reach the database.
 
-### Launching is open; managing is not
+### Everything is behind the sign-in
 
-Viewing the wall and clicking through to a tool never require a sign-in — that
-is the point of a home base, and each tool asks for its own login if it wants
-one. Add, edit, delete and reorder all sit behind the sign-in, so someone who
-finds the URL is shown a launcher, not an editor.
+A sign-in gate is the first and only screen until Supabase returns a user. The
+wall is not rendered and no row is fetched before that: `openApp()` owns the
+first paint, and nothing above it touches `state.tools`. This matches the gate
+contract already used by Docket, SC and Daily — full-screen overlay, an
+`unlocked` guard, session restored silently on load, a shake on refusal, and a
+reload on sign-out.
 
-Be precise about what that gate does. An anonymous visitor could never reach
-your data in the first place: `hut.tools` is behind RLS, the policy tests
-`auth.uid() = user_id`, and `anon` is revoked from the schema itself, so an
-unauthenticated caller cannot even resolve the table name. Anonymous edits, back
-when they were allowed, only ever wrote to that visitor's own `localStorage` and
-never left their browser. The gate removes a **misleading affordance** — edit
-controls implying the page is world-editable — rather than closing a hole.
+This replaces the earlier model, where the wall was public and only the edit
+controls sat behind the account. That was a defensible design for a launcher —
+each tool asks for its own login anyway — but it is not what this app does now:
+**viewing the wall requires an account.**
 
-The six starter tools are a `DEFAULT_TOOLS` constant in `script.js` rather than
-rows inserted by a migration, so the page paints before the database answers and
-before an account exists. Their ids come from a fixed base rather than
-`Date.now()`, so two devices seeding independently produce the same six ids
-instead of twelve cards.
+Be precise about what the gate does and does not do. It is a **UI boundary, not
+the security boundary.** An anonymous visitor could never reach your data
+regardless: `hut.tools` has RLS enabled *and* forced, the policy tests
+`auth.uid() = user_id`, and `anon` is revoked from the `hut` schema itself, so
+an unauthenticated caller cannot even resolve the table name. The gate keeps
+the wall private; **row-level security is what keeps the data safe.**
 
 ### What signing in merges
 

@@ -974,6 +974,130 @@ kbd {
   transition: opacity var(--t-enter) var(--ease-out), visibility 0s;
 }
 
+
+/* ── sign-in gate ───────────────────────────────────────── */
+
+/* The first screen, and the only one until Supabase returns a user. It
+   depends on nothing but the tokens, so it paints correctly before any app
+   state exists. This is also the one surface in the app where motion is
+   earned rather than spent: it is seen once per session, not twenty times a
+   day, which is exactly the frequency band where a little animation reads as
+   craft instead of lag. */
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s6);
+  padding: var(--s5);
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.gate.is-gone { display: none; }
+
+.gate-card {
+  width: min(400px, 100%);
+  padding: var(--s7) var(--s6) var(--s6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gate-card { animation: gate-rise 420ms var(--ease-out) both; }
+}
+/* Never from scale(0) -- a card that grows out of nothing reads as a glitch. */
+@keyframes gate-rise {
+  from { opacity: 0; transform: translateY(12px) scale(.99); }
+}
+
+.gate-mark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto var(--s4);
+  border-radius: var(--radius-pill);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.gate-mark svg { width: 26px; height: 26px; }
+
+.gate-card h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  color: var(--fg);
+}
+.gate-card h1 em { font-style: normal; color: var(--fg-muted); }
+
+.gate-sub {
+  margin: var(--s2) 0 var(--s6);
+  font-size: .9rem;
+  color: var(--fg-muted);
+}
+
+#gateEmail,
+#gatePassword {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 var(--s3);
+  margin-bottom: var(--s2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  color: var(--fg);
+  font: inherit;
+  font-size: 1rem; /* 16px stops iOS Safari zooming the page on focus */
+}
+#gateEmail::placeholder,
+#gatePassword::placeholder { color: var(--fg-subtle); }
+#gateEmail:focus-visible,
+#gatePassword:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  border-color: var(--ring);
+}
+
+.btn-block { width: 100%; margin-top: var(--s2); }
+
+/* Holds its own line height so the card does not jump when a message lands. */
+.gate-msg {
+  min-height: 1.4em;
+  margin: var(--s3) 0 0;
+  font-size: .86rem;
+  color: var(--danger);
+}
+.gate-msg.is-busy { color: var(--fg-muted); }
+
+.gate-foot {
+  margin: 0;
+  font-size: .78rem;
+  color: var(--fg-subtle);
+}
+
+/* A refused password. This is feedback, not decoration: it says "read and
+   rejected" faster than a sentence can, which is why it survives the motion
+   budget that deleted the launch bounce. */
+@media (prefers-reduced-motion: no-preference) {
+  .gate-card.is-wrong { animation: gate-shake 380ms var(--ease-hover); }
+}
+@keyframes gate-shake {
+  10%, 90% { transform: translateX(-3px); }
+  30%, 70% { transform: translateX(5px); }
+  50%      { transform: translateX(-5px); }
+}
+
 /* ── reduced motion ─────────────────────────────────────── */
 
 /* Reduced motion means gentler, not absent: transforms and the pulse go,

@@ -87,6 +87,7 @@
     view: 'grid',      // grid | list
     order: 'manual',   // manual | frecency
     theme: 'dark',     // light | dark
+    unlocked: false,   // true once the gate has been passed
     palette: { open: false, items: [], index: 0 }
   };
 
@@ -133,13 +134,13 @@
     toolDelete: $('toolDelete'),
     toolCancel: $('toolCancel'),
 
-    authDialog: $('authDialog'),
-    authForm: $('authForm'),
-    fEmail: $('fEmail'),
-    fPassword: $('fPassword'),
-    authError: $('authError'),
-    authSubmit: $('authSubmit'),
-    authCancel: $('authCancel'),
+    gate: $('gate'),
+    app: $('app'),
+    gateForm: $('gateForm'),
+    gateEmail: $('gateEmail'),
+    gatePassword: $('gatePassword'),
+    gateBtn: $('gateBtn'),
+    gateMsg: $('gateMsg'),
 
     confirmDialog: $('confirmDialog'),
     confirmText: $('confirmText'),
@@ -545,16 +546,12 @@
         run: () => setOrder(state.order === 'manual' ? 'frecency' : 'manual') },
       { kind: 'action', id: 'a-theme', name: 'Switch theme', hint: 'Light or dark', icon: 'ui-sun', run: cycleTheme }
     ];
-    // Managing the wall needs a backend. Without one, offering "Add tool" only
-    // leads to a sign-in sheet that can never succeed -- the topbar already
-    // hides these, and the palette must agree with it.
-    if (cloud.configured()) {
-      actions.unshift({ kind: 'action', id: 'a-add', name: 'Add tool',
-        hint: 'Create a new card', icon: 'ui-plus', run: () => openToolDialog(null) });
-      actions.push(state.signedIn
-        ? { kind: 'action', id: 'a-out', name: 'Sign out', hint: state.email, icon: 'ui-user', run: signOut }
-        : { kind: 'action', id: 'a-in', name: 'Sign in', hint: 'Manage and sync your cards', icon: 'ui-user', run: openAuthDialog });
-    }
+    // Past the gate there is always a session, so neither of these needs a
+    // guard any more -- the gate is the guard.
+    actions.unshift({ kind: 'action', id: 'a-add', name: 'Add tool',
+      hint: 'Create a new card', icon: 'ui-plus', run: () => openToolDialog(null) });
+    actions.push({ kind: 'action', id: 'a-out', name: 'Sign out',
+      hint: state.email, icon: 'ui-user', run: signOut });
     return actions;
   }
 
@@ -803,9 +800,9 @@
   }
 
   function openToolDialog(id) {
-    // Managing the wall requires an account. Offer the way in rather than a
-    // dead button: a visitor who taps "Add tool" gets the sign-in sheet.
-    if (!state.signedIn) { openAuthDialog(); return; }
+    // Unreachable while the gate stands, since nothing renders before there
+    // is a session -- kept so a future caller cannot open the editor signed out.
+    if (!state.signedIn) return;
 
     state.editingId = id == null ? null : id;
     const tool = id == null ? null : state.tools.find(t => t.id === id);
@@ -1025,57 +1022,93 @@
 
   /* ── auth ─────────────────────────────────────────────── */
 
-  function openAuthDialog() {
-    el.authError.hidden = true;
-    el.authDialog.showModal();
-    el.fEmail.focus();
+  function gateMessage(text, busy) {
+    el.gateMsg.textContent = text || '';
+    el.gateMsg.classList.toggle('is-busy', !!busy);
   }
 
-  async function doSignIn() {
-    const email = el.fEmail.value.trim();
-    const password = el.fPassword.value;
+  /* Refuse visibly. Dropping the class, forcing a reflow, then re-adding it is
+     what lets two rejections in a row both animate -- without the reflow the
+     browser coalesces the states and the second one sits perfectly still. */
+  function refuse(message) {
+    const card = document.querySelector('.gate-card');
+    gateMessage(message || 'That did not work.', false);
+    if (card) {
+      card.classList.remove('is-wrong');
+      void card.offsetWidth;
+      card.classList.add('is-wrong');
+    }
+    el.gatePassword.select();
+  }
+
+  async function doSignIn(event) {
+    event.preventDefault();
+    const email = el.gateEmail.value.trim();
+    const password = el.gatePassword.value;
     if (!email || !password) return;
 
-    el.authSubmit.disabled = true;
-    el.authSubmit.textContent = 'Signing in…';
+    el.gateBtn.disabled = true;
+    el.gateBtn.textContent = 'Signing in\u2026';
+    gateMessage('Checking your details\u2026', true);
     try {
       const result = await cloud.signIn(email, password);
-      if (!result.ok) {
-        el.authError.textContent = result.error;
-        el.authError.hidden = false;
-        return;
-      }
-      el.fPassword.value = '';
-      el.authDialog.close();
+      if (!result.ok) { refuse(result.error); return; }
+      // Never leave a password sitting in the DOM after it has been spent.
+      el.gatePassword.value = '';
+      gateMessage('', false);
+      await openApp(await cloud.getSession());
+    } catch (error) {
+      refuse(error && error.message);
     } finally {
-      el.authSubmit.disabled = false;
-      el.authSubmit.textContent = 'Sign in';
+      el.gateBtn.disabled = false;
+      el.gateBtn.textContent = 'Sign in';
     }
   }
 
-  async function signOut() {
-    await cloud.signOut();
-    // The wall stays exactly as it is — it is in localStorage too. Only the
-    // pending cloud delta is dropped, because there is no longer an account
-    // to push it to.
-    state.dirty.clear();
-    state.removed.clear();
-    applySession(null);
-    toast('Signed out. Your cards stay on this device.');
+  /* Everything past the gate. Nothing before this point renders a card or
+     fetches a row -- that is the whole point of the gate. */
+  async function openApp(session) {
+    if (state.unlocked) return;
+    state.unlocked = true;
+    state.signedIn = true;
+    state.email = (session && session.user && session.user.email) || '';
+
+    el.gate.classList.add('is-gone');
+    el.app.hidden = false;
+    applyAccount();
+
+    // Per-device preferences, then the cached wall, then the network -- so the
+    // wall is on screen and launchable before Supabase answers.
+    state.usage = readJson(LS.usage, {});
+    state.tools = cacheRead() || DEFAULT_TOOLS.map(tool => ({ ...tool }));
+    setView(state.view);
+    setOrder(state.order);
+
+    await loadFromCloud();
   }
 
-  function applySession(session) {
-    state.signedIn = !!session;
-    state.email = session && session.user ? session.user.email || '' : '';
-    // The account is worth showing, but on the control that acts on it rather
-    // than as a line of prose under the cards.
+  /* Push whatever is still owed before the session goes, then reload rather
+     than dismantle the app by hand. A reload is the only way to guarantee no
+     signed-in state survives on screen, and it lands you back on the gate --
+     which is now the front door, not a dialog. */
+  async function signOut() {
+    try {
+      if (state.dirty.size || state.removed.size) await flush();
+    } catch (_) {
+      // A failed final push must not trap you inside the app.
+    }
+    state.dirty.clear();
+    state.removed.clear();
+    try { await cloud.signOut(); } catch (_) {}
+    location.reload();
+  }
+
+  // The account is worth showing, but on the control that acts on it rather
+  // than as a line of prose under the cards.
+  function applyAccount() {
     el.authBtn.setAttribute('aria-label',
-      state.signedIn ? 'Sign out (' + state.email + ')' : 'Sign in to manage and sync your cards');
-    el.authBtn.title = state.signedIn
-      ? 'Signed in as ' + state.email
-      : 'Sign in to manage and sync your cards';
-    if (!state.signedIn) setPill('idle', 'Local');
-    render();
+      state.email ? 'Sign out (' + state.email + ')' : 'Sign out');
+    el.authBtn.title = state.email ? 'Signed in as ' + state.email : 'Sign out';
   }
 
   /* ── theme ────────────────────────────────────────────── */
@@ -1113,10 +1146,8 @@
   el.searchBtn.addEventListener('click', openPalette);
   el.themeBtn.addEventListener('click', cycleTheme);
 
-  el.authBtn.addEventListener('click', async () => {
-    if (!state.signedIn) { openAuthDialog(); return; }
-    await signOut();
-  });
+  el.authBtn.addEventListener('click', signOut);
+  el.gateForm.addEventListener('submit', doSignIn);
 
   el.viewGrid.addEventListener('click', () => setView('grid'));
   el.viewList.addEventListener('click', () => setView('list'));
@@ -1139,6 +1170,8 @@
   });
 
   document.addEventListener('keydown', (event) => {
+    // No app shortcuts while the gate is up -- "/" belongs to the email field.
+    if (!state.unlocked) return;
     const key = event.key.toLowerCase();
     if ((event.metaKey || event.ctrlKey) && key === 'k') {
       event.preventDefault();
@@ -1174,12 +1207,6 @@
   el.tabEmoji.addEventListener('keydown', onTabKey);
   el.tabSvg.addEventListener('keydown', onTabKey);
 
-  el.authForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    doSignIn();
-  });
-  el.authCancel.addEventListener('click', () => el.authDialog.close());
-
   el.confirmOk.addEventListener('click', doDelete);
   el.confirmCancel.addEventListener('click', () => {
     state.pendingDeleteId = null;
@@ -1196,48 +1223,43 @@
   async function boot() {
     // The shortcut hint has to match the keyboard actually in front of you.
     const mac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
-    el.searchKbd.textContent = mac ? '⌘K' : 'Ctrl K';
+    el.searchKbd.textContent = mac ? '\u2318K' : 'Ctrl K';
 
     let storedTheme = 'dark';
     try { storedTheme = localStorage.getItem(LS.theme) || 'dark'; } catch (_) {}
     applyTheme(storedTheme);
 
-    state.usage = readJson(LS.usage, {});
-    let storedView = 'grid', storedOrder = 'manual';
+    // Read the per-device preferences now, but do not paint: openApp() owns
+    // the first render, and nothing renders before there is a session.
     try {
-      storedView = localStorage.getItem(LS.view) || 'grid';
-      storedOrder = localStorage.getItem(LS.order) || 'manual';
+      state.view  = localStorage.getItem(LS.view)  === 'list'     ? 'list'     : 'grid';
+      state.order = localStorage.getItem(LS.order) === 'frecency' ? 'frecency' : 'manual';
     } catch (_) {}
 
-    // Paint before touching the network: cache first, constants if there is no
-    // cache. The wall is usable and launchable before Supabase answers.
-    state.tools = cacheRead() || DEFAULT_TOOLS.map(tool => ({ ...tool }));
-
-    // Each of these renders once; the last one is the paint that counts.
-    setView(storedView);
-    setOrder(storedOrder);
-
     if (!cloud.configured()) {
-      // The pill is the whole status surface. In a deployed build this branch
-      // is unreachable: the workflow fails if the placeholders survive.
-      setPill('idle', 'Local only');
-      el.pill.title = 'No database is configured for this deployment, so the wall ' +
-                      'is read-only here. Your cards still launch, and anything ' +
-                      'saved on this device stays on it.';
-      el.authBtn.hidden = true;
-      el.addBtn.hidden = true;
-      el.emptyAdd.hidden = true;
+      // Without a backend there is nothing to authenticate against, and the
+      // gate is the only screen there is. Say so plainly rather than showing a
+      // form that could never succeed.
+      gateMessage('Cloud sync is not configured for this deployment.', false);
+      el.gateBtn.disabled = true;
+      el.gateEmail.disabled = true;
+      el.gatePassword.disabled = true;
       return;
     }
 
-    cloud.onAuthChange((event, session) => {
-      applySession(session);
-      if (session) loadFromCloud();
-    });
+    // A session already in localStorage opens the app without a round trip:
+    // the gate should not ask again for something the browser already holds.
+    try {
+      const session = await cloud.getSession();
+      if (session) await openApp(session);
+    } catch (error) {
+      gateMessage((error && error.message) || 'Could not restore your session.', false);
+    }
 
-    const session = await cloud.getSession();
-    applySession(session);
-    if (session) loadFromCloud();
+    // Signing out in another tab must not leave this one sitting on the wall.
+    cloud.onAuthChange((event, session) => {
+      if (!session && state.unlocked) location.reload();
+    });
   }
 
   boot();
